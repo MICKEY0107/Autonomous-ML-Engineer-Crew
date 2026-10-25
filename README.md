@@ -46,12 +46,16 @@ Key capabilities:
 - Lets the LLM choose among trained candidates inside a deterministic quality
   band, so reasoning affects the selected artifact instead of merely narrating it.
 - Persists experiment parameters, metrics, artifacts, and winners in MLflow.
-- Sends the model-selection task through a local Google ADK A2A service.
+- Sends the model-selection task to a Google ADK agent over the real A2A
+  protocol (Agent Card discovery + `SendMessage`).
+- Runs the data-prep and evaluation decisions as real CrewAI crews
+  (`Agent` + `Task` + `Crew`, `output_pydantic`, task guardrails).
+- Records LLM tokens, latency and estimated cost per agent for every run.
 - Produces correlated Langfuse/OpenTelemetry spans without logging raw rows.
 - Retries failed evaluations at most twice, for three total attempts.
 - Exposes live progress, contracts, results, and trace structure in a React UI.
-- Fails closed on invalid CSVs, prompt-injection-like goals, and malformed tool
-  responses.
+- Fails closed on invalid CSVs, prompt-injection-like or toxic goals, malformed
+  A2A tasks, and malformed tool responses.
 
 ## Agentic decisions versus deterministic execution
 
@@ -70,12 +74,37 @@ artifact writes, contract validation, and the final pass/fail threshold. Invalid
 or unavailable LLM output falls back to a safe typed policy. Set `LLM_MODE=live`
 for real decisions or `LLM_MODE=offline` for repeatable local tests.
 
+## Who decides what
+
+| Agent | Framework | LLM decision (typed output) | How it runs |
+|---|---|---|---|
+| Orchestrator | CrewAI Flow | final run summary | `orchestrator/flow.py` routes stages, owns `PipelineState`, retries |
+| Data Preparation Engineer | CrewAI | `DataPrepPlan`: extra exclusions, split size, imputation | `Crew.kickoff()` in `orchestrator/crew_agents.py`, called from `agents/data_prep.py` |
+| Model Selection Agent | Google ADK (`BaseAgent`, A2A server) | `ModelSearchPlan` (bounded hyperparameters) and `ModelChoice` (inside the quality band) | `agents/model_selection_adk.py`, reached only over A2A |
+| Model Evaluation Engineer | CrewAI | `EvaluationReflection`: diagnosis + retry guidance | `Crew.kickoff()` in `agents/evaluation.py`; its guidance is sent back to the ADK agent on retry |
+
+## How the course minimum requirements are met
+
+| # | Requirement | Where it lives |
+|---|---|---|
+| 1 | Context sharing via state | `PipelineState` (`contracts/models.py`) owned by the Flow; each agent's typed result feeds the next (`DataPrepResult` → A2A request → `ModelSelectionResult` → `EvaluationResult` → retry feedback) |
+| 2 | ≥ 2 MCP tools | `tools/profile_dataset.py` and `tools/log_experiment.py` (MCP servers, called through MCP client sessions) |
+| 3 | Structured output (Pydantic) | Six contracts in `contracts/models.py`; CrewAI `output_pydantic`; final `PipelineResult` JSON + Markdown model card |
+| 4 | Agentic design patterns | Sequential flow with conditional routing, tool use, planning (search plan), evaluator-optimizer **reflection loop** with bounded retries, multi-agent A2A delegation |
+| 5 | Monitoring with callbacks | Flow callbacks `on_stage_start/complete/error`, `on_retry`, `on_validation_failure` (`orchestrator/flow.py`); ADK `before_agent_callback` / `after_agent_callback` |
+| 6 | A2A between ADK and CrewAI | `orchestrator/a2a_client.py` (a2a-sdk client: Agent Card + `SendMessage`) → `to_a2a()` server in `agents/model_selection_adk.py` |
+| 7 | Only CrewAI and ADK | No other agent framework is imported |
+| 8 | Guardrails | CSV size/rows/path/target checks, prompt-injection and toxic-language checks (`main.py`), CrewAI task guardrails, ADK input-validation callback, Pydantic fail-closed parsing of every MCP/A2A return, raw rows never sent to LLMs |
+| 9 | Observability | Langfuse via OpenTelemetry, one trace per `run_id` across CrewAI, A2A and ADK; MLflow lineage |
+| 10 | Performance, cost, runtime | `orchestrator/usage.py` ledger → `PipelineResult.usage_report`, CLI `[USAGE]` line, dashboard cost card; held-out metrics per run |
+| 11 | Cloud deployment | Planned for Phase 3 (Docker + Cloud Run) |
+
 ## Technology stack
 
 | Area | Technology |
 |---|---|
 | Orchestration | CrewAI Flow |
-| Remote agent | Google ADK exposed through A2A on `127.0.0.1:8080` |
+| Remote agent | Google ADK exposed through A2A on `127.0.0.1:8080` (a2a-sdk client) |
 | Tool protocol | MCP |
 | Contracts | Pydantic v2 |
 | Model training | pandas and scikit-learn |
@@ -101,10 +130,24 @@ and verified on Windows.
 
 From the project root:
 
+With [uv](https://docs.astral.sh/uv/) (recommended; matches `uv.lock`):
+
+```powershell
+uv sync --extra dev
+```
+
+Or with plain pip:
+
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+```
+
+Check that your LLM keys work (prints no secrets):
+
+```powershell
+.\.venv\Scripts\python.exe scripts\llm_diag.py
 ```
 
 If the existing `.venv` is already populated, this step can be skipped.
@@ -290,8 +333,8 @@ input returns a typed `FAILED_INPUT` result instead of crashing the process.
 ### 2. Data preparation
 
 `agents/data_prep.py` validates and reads the CSV, drops rows with missing target
-values, removes duplicates, prepares the feature set, and creates an 80/20
-train/test split. Classification splits are stratified when the dataset permits
+values, removes duplicates, prepares the feature set, and creates the train/test
+split chosen by the Data Preparation Engineer crew (bounded to 15–30% test). Classification splits are stratified when the dataset permits
 it. The resulting CSV artifacts are written under the active artifact root.
 
 ### 3. Dataset profiling MCP tool
@@ -306,8 +349,15 @@ it. The resulting CSV artifacts are written under the active artifact root.
 
 ### 4. ADK model selection over A2A
 
-`agents/model_selection_adk.py` receives the typed data-prep result through an
-A2A task message and trains three candidates:
+The CrewAI Flow never imports the ADK agent. `orchestrator/a2a_client.py`
+fetches the agent's public Agent Card from `/.well-known/agent-card.json`,
+then sends one A2A `SendMessage` request whose text part is the JSON
+`ModelSelectionRequest`. The W3C `traceparent` header travels with it, so the
+ADK side joins the same Langfuse trace. The ADK `before_agent_callback`
+rejects malformed tasks before any model is trained.
+
+`agents/model_selection_adk.py` then plans a bounded search, trains three
+candidates:
 
 | Task | Candidates |
 |---|---|
@@ -364,7 +414,8 @@ The project enforces these controls before and during execution:
 - A dataset must contain more than 10 data rows.
 - Path traversal is rejected.
 - The requested target column must exist.
-- Prediction goals are checked for prompt-injection-like instructions.
+- Prediction goals are checked for prompt-injection-like instructions and for
+  toxic or abusive language (profanity, threats, harassment).
 - Raw rows are excluded from LLM prompts and telemetry.
 - MCP and A2A return values are validated with Pydantic before use.
 - Langfuse span payloads contain schema, metrics, hashes, and artifact URIs—not
@@ -384,6 +435,13 @@ pipeline.run
 │   └── mcp.log_and_query_experiment
 └── agent.evaluation
 ```
+
+Every live LLM call is also recorded in a per-run usage ledger
+(`orchestrator/usage.py`): agent, framework, provider, model, prompt and
+completion tokens, latency and estimated cost (`LLM_INPUT_COST_PER_1M` /
+`LLM_OUTPUT_COST_PER_1M`). Totals and a per-agent breakdown appear in
+`PipelineResult.usage_report`, the CLI `[USAGE]` line, the saved
+`pipeline_result.json` and the dashboard.
 
 Span inputs and outputs are populated with redacted, row-safe metadata. The
 dashboard presents the same hierarchy in its Traces tab and links to the
