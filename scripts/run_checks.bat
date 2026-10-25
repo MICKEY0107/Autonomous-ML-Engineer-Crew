@@ -1,4 +1,5 @@
 @echo off
+setlocal
 cd /d "%~dp0\.."
 set LLM_MODE=offline
 echo STARTED %DATE% %TIME% > tmp\check_output.txt

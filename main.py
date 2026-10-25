@@ -671,6 +671,24 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         print(f"[PIPELINE]    ✗ {flow.state.status} — {result.error}", flush=True)
+    report = result.usage_report
+    print(
+        f"[USAGE]       runtime {result.runtime_seconds:.1f}s | "
+        f"{report.get('llm_requests', 0)} LLM calls, "
+        f"{report.get('llm_latency_seconds', 0):.1f}s in LLMs | "
+        f"tokens in/out {result.input_tokens}/{result.output_tokens} | "
+        f"est. cost ${result.estimated_cost_usd:.6f}",
+        flush=True,
+    )
+    for agent, bucket in report.get("by_agent", {}).items():
+        print(
+            f"              - {agent}: {bucket['requests']} calls, "
+            f"{bucket['total_tokens']} tokens, ${bucket['estimated_cost_usd']:.6f}",
+            flush=True,
+        )
+    result_path = artifact_dir / "pipeline_result.json"
+    result_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
+    print(f"[RESULT]      {result_path}", flush=True)
     print(f"[TRACE]       {result.trace_url}", flush=True)
     flush_traces()
     return 0 if flow.state.status == PipelineStatus.SUCCESS else 1

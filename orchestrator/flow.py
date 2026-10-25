@@ -424,6 +424,8 @@ class AutonomousMLEngineerFlow(Flow[PipelineState]):
                     },
                     output={
                         "reasoning": result.llm_reasoning,
+                        # The ADK agent reports its live LLM calls; none = fallback policy.
+                        "fallback_used": not result.llm_usage,
                     },
                 )
             return result

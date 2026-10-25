@@ -26,6 +26,10 @@ from pydantic import BaseModel
 
 from orchestrator import usage
 
+# Never pause a run on CrewAI's interactive "share traces?" prompt; our
+# observability is Langfuse/OpenTelemetry.
+os.environ.setdefault("CREWAI_TRACING_ENABLED", "false")
+
 T = TypeVar("T", bound=BaseModel)
 
 GuardrailFn = Callable[[Any], tuple[bool, Any]]
@@ -54,7 +58,7 @@ def pydantic_guardrail(
 ) -> GuardrailFn:
     """Build a CrewAI task guardrail: (passed, value_or_error_message)."""
 
-    def guardrail(task_output: Any) -> tuple[bool, Any]:
+    def guardrail(task_output):  # CrewAI inspects this signature; keep it unannotated
         try:
             parsed = task_output.pydantic
             if parsed is None:

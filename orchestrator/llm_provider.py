@@ -22,13 +22,19 @@ def _build_llm(provider: str, model: str) -> "LLM":
         from google.genai import types
 
         timeout_ms = int(os.getenv("LLM_FALLBACK_TIMEOUT_SECONDS", "15")) * 1_000
+        extra: dict = {}
+        # Optional: only some Gemini models accept a thinking budget (newer ones
+        # reject thinking_budget=0 with 400 INVALID_ARGUMENT), so it is opt-in.
+        budget = os.getenv("GEMINI_THINKING_BUDGET", "").strip()
+        if budget:
+            extra["thinking_config"] = types.ThinkingConfig(thinking_budget=int(budget))
         return LLM(
             model=model,
             api_key=os.environ["GEMINI_API_KEY"],
             temperature=0.1,
             max_output_tokens=max_tokens,
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
             client_params={"http_options": types.HttpOptions(timeout=timeout_ms)},
+            **extra,
         )
     if provider == "openrouter":
         api_key = os.getenv("OPENROUTER_API_KEY") or os.environ[
