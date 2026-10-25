@@ -12,6 +12,7 @@ The incoming A2A message must contain JSON matching
 from __future__ import annotations
 
 import asyncio
+import logging
 import contextvars
 import json
 import math
@@ -65,6 +66,7 @@ from tools.log_experiment import (
     server as experiment_mcp_server,
 )
 from orchestrator.telemetry import (
+    add_trace_event,
     extracted_trace_context,
     set_current_span_attributes,
     traced_span,
@@ -723,6 +725,63 @@ class ModelSelectionAgent(BaseAgent):
         )
 
 
+# --- ADK agent callbacks: monitoring + input validation -----------------------
+_AGENT_STARTED: dict[str, float] = {}
+_adk_logger = logging.getLogger("adk.model_selection_agent")
+
+
+def _message_text(callback_context: Any) -> str:
+    content = callback_context.user_content
+    if content is None or not content.parts:
+        return ""
+    return "".join(part.text or "" for part in content.parts)
+
+
+def before_agent_callback(callback_context: Any) -> types.Content | None:
+    """Validate the incoming A2A task before the agent runs (fail closed).
+
+    Returning Content short-circuits the agent: ADK sends this reply instead of
+    running model selection, so malformed or untyped tasks never train models.
+    """
+
+    invocation = callback_context.invocation_id
+    _AGENT_STARTED[invocation] = time.perf_counter()
+    try:
+        request = parse_task_message(_message_text(callback_context))
+    except ModelSelectionError as exc:
+        _adk_logger.warning("rejected A2A task %s: %s", invocation, exc)
+        add_trace_event("adk.before_agent.rejected", {"invocation_id": invocation, "error": str(exc)})
+        return types.Content(
+            role="model",
+            parts=[types.Part.from_text(text=json.dumps({"error": f"rejected: {exc}"}))],
+        )
+    fields = {
+        "invocation_id": invocation,
+        "agent": callback_context.agent_name,
+        "run_id": str(request.data_prep_result.run_id),
+        "task_type": str(request.task_type),
+        "retry_attempt": request.retry_attempt,
+    }
+    _adk_logger.info("before_agent %s", fields)
+    add_trace_event("adk.before_agent", fields)
+    return None
+
+
+def after_agent_callback(callback_context: Any) -> types.Content | None:
+    """Record how long the ADK agent took for this invocation."""
+
+    invocation = callback_context.invocation_id
+    started = _AGENT_STARTED.pop(invocation, None)
+    fields = {
+        "invocation_id": invocation,
+        "agent": callback_context.agent_name,
+        "duration_ms": int((time.perf_counter() - started) * 1000) if started else -1,
+    }
+    _adk_logger.info("after_agent %s", fields)
+    add_trace_event("adk.after_agent", fields)
+    return None
+
+
 root_agent = ModelSelectionAgent(
     name="model_selection_agent",
     description=(
@@ -730,6 +789,8 @@ root_agent = ModelSelectionAgent(
         "three task-appropriate candidates, tracks them in MLflow, and returns "
         "a validated ModelSelectionResult."
     ),
+    before_agent_callback=before_agent_callback,
+    after_agent_callback=after_agent_callback,
 )
 
 # ``to_a2a`` supplies the A2A Agent Card (/.well-known/agent-card.json), task

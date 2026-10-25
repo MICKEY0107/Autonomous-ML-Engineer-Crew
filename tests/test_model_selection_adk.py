@@ -148,3 +148,34 @@ def test_a2a_service_contract_is_strict_and_bound_to_localhost(tmp_path) -> None
     assert card["supportedInterfaces"][0]["url"] == "http://127.0.0.1:8080"
     with pytest.raises(ModelSelectionError, match="valid ModelSelectionRequest JSON"):
         parse_task_message('{"data_prep_result": {}, "unexpected": true}')
+
+
+def test_adk_callbacks_validate_task_and_record_duration(tmp_path) -> None:
+    from types import SimpleNamespace
+
+    from google.genai import types as genai_types
+
+    from agents.model_selection_adk import after_agent_callback, before_agent_callback
+
+    def context(text: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            invocation_id="inv-1",
+            agent_name="model_selection_agent",
+            user_content=genai_types.Content(
+                role="user", parts=[genai_types.Part.from_text(text=text)]
+            ),
+        )
+
+    rejected = before_agent_callback(context('{"unexpected": true}'))
+    assert rejected is not None
+    assert "rejected" in rejected.parts[0].text
+
+    frame = pd.DataFrame(
+        {"x": [float(i) for i in range(20)], "target": ["a", "b"] * 10}
+    )
+    request = ModelSelectionRequest(
+        data_prep_result=_data_prep_result(tmp_path, frame, CLASSIFICATION_RUN_ID),
+        task_type="classification",
+    )
+    assert before_agent_callback(context(request.model_dump_json())) is None
+    assert after_agent_callback(context("")) is None
