@@ -52,18 +52,31 @@ def _call_reasoner(
 
             from orchestrator import usage
 
-            source = "llm"
-            started = time.perf_counter()
-            try:
-                llm = crewai_llm()
-                response = llm.call(prompt)
-            except Exception:
-                alternate = fallback_crewai_llm()
-                if alternate is None:
-                    raise
-                llm, source = alternate, "secondary_llm"
+            from orchestrator import llm_provider
+
+            def candidates():
+                # Narrative text may use a cheaper/local model first
+                # (LLM_NARRATIVE_MODEL, e.g. ollama/...), then the normal chain.
+                yield "narrative_llm", llm_provider.narrative_llm
+                yield "llm", crewai_llm
+                yield "secondary_llm", fallback_crewai_llm
+                for extra in llm_provider.extra_fallback_llms():
+                    yield "secondary_llm", (lambda built=extra: built)
+
+            response = None
+            last_error: Exception | None = None
+            for source, factory in candidates():
                 started = time.perf_counter()
-                response = alternate.call(prompt)
+                try:
+                    llm = factory()
+                    if llm is None:
+                        continue
+                    response = llm.call(prompt)
+                    break
+                except Exception as exc:
+                    last_error = exc
+            if response is None:
+                raise last_error or RuntimeError("no LLM provider configured")
             try:
                 metrics = llm.get_token_usage_summary()
                 usage.record(
@@ -86,7 +99,7 @@ def _call_reasoner(
                 raise ValueError("LLM returned an empty response")
             update_span_io(
                 span,
-                output={"reasoning": rendered, "fallback_used": False},
+                output={"reasoning": rendered, "fallback_used": False, "source": source},
             )
             return rendered
         except Exception as exc:

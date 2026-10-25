@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from orchestrator.telemetry import traced_span, update_span_io
 
 
-DecisionSource = Literal["llm", "secondary_llm", "fallback"]
+DecisionSource = Literal["llm", "secondary_llm", "cache", "fallback"]
 
 
 def crewai_llm() -> Any:
@@ -53,31 +53,58 @@ def _record_llm_usage(llm: Any, *, stage: str, source: str, elapsed: float) -> N
 
 
 def _call_live_llm(prompt: str, *, stage: str = "decision") -> tuple[Any, str]:
-    """Call the primary LLM, then an independent provider on API failure.
+    """Try each provider in the chain once (no retry storms).
 
+    Order: primary -> first fallback -> any further LLM_FALLBACK_CHAIN entries.
     Returns (response, source) where source is ``llm`` or ``secondary_llm``.
     """
 
     import time
 
-    started = time.perf_counter()
-    try:
-        llm = crewai_llm()
-        response = llm.call(prompt)
-        _record_llm_usage(llm, stage=stage, source="llm", elapsed=time.perf_counter() - started)
-        return response, "llm"
-    except Exception:
-        from orchestrator.llm_provider import fallback_crewai_llm
+    from orchestrator import llm_provider
 
-        fallback = fallback_crewai_llm()
-        if fallback is None:
-            raise
+    def candidates():
+        yield "llm", crewai_llm
+        yield "secondary_llm", llm_provider.fallback_crewai_llm
+        for extra in llm_provider.extra_fallback_llms():
+            yield "secondary_llm", (lambda built=extra: built)
+
+    last_error: Exception | None = None
+    for source, factory in candidates():
         started = time.perf_counter()
-        response = fallback.call(prompt)
-        _record_llm_usage(
-            fallback, stage=stage, source="secondary_llm", elapsed=time.perf_counter() - started
-        )
-        return response, "secondary_llm"
+        try:
+            llm = factory()
+            if llm is None:
+                continue
+            response = llm.call(prompt)
+        except Exception as exc:
+            last_error = exc
+            continue
+        _record_llm_usage(llm, stage=stage, source=source, elapsed=time.perf_counter() - started)
+        return response, source
+    raise last_error or RuntimeError("no LLM provider configured")
+
+
+def _from_cache(stage: str, inputs: dict[str, Any], model: type[BaseModel], agent: str, framework: str):
+    """Return a cached, re-validated decision labelled source='cache', or None."""
+
+    from orchestrator import decision_cache, usage
+
+    cached = decision_cache.get(stage, inputs)
+    if cached is None:
+        return None
+    try:
+        decision = model.model_validate({**cached, "source": "cache"})
+    except Exception:
+        return None
+    usage.record(stage=stage, agent=agent, framework=framework, source="cache")
+    return decision
+
+
+def _to_cache(stage: str, inputs: dict[str, Any], decision: BaseModel) -> None:
+    from orchestrator import decision_cache
+
+    decision_cache.put(stage, inputs, decision.model_dump(exclude={"source"}))
 
 
 class DataPrepPlan(BaseModel):
@@ -145,6 +172,82 @@ def _json_object(response: Any) -> dict[str, Any]:
     return decoded
 
 
+def _json_value(response: Any) -> Any:
+    """Parse an LLM reply that may be fenced and may be an object or a list."""
+
+    rendered = str(response).strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", rendered, re.DOTALL)
+    if fenced:
+        rendered = fenced.group(1).strip()
+    if rendered.startswith("["):
+        return json.loads(rendered[: rendered.rfind("]") + 1])
+    return _json_object(rendered)
+
+
+def _number_like(value: Any) -> Any:
+    """'0.1' -> 0.1, '200' -> 200, 'null'/'None' -> None; anything else unchanged."""
+
+    if isinstance(value, str):
+        text = value.strip()
+        if text.casefold() in {"null", "none", ""}:
+            return None
+        try:
+            number = float(text)
+        except ValueError:
+            return value
+        return int(number) if number.is_integer() and "." not in text else number
+    if isinstance(value, float) and value.is_integer():
+        return int(value)  # 100.0 -> 100 for integer-only parameters
+    return value
+
+
+def _normalise_search_plan(raw: Any) -> dict[str, Any]:
+    """Repair common *format* slips of smaller models; bounds are checked after.
+
+    Accepts a bare list of candidates, numbers written as strings, and a
+    per-candidate ``reasoning`` field. It never invents parameters or values.
+    """
+
+    if isinstance(raw, list):
+        raw = {"candidates": raw}
+    if not isinstance(raw, dict):
+        raise ValueError("model-search plan must be a JSON object or list")
+    notes: list[str] = []
+    candidates = []
+    for item in raw.get("candidates", []):
+        if not isinstance(item, dict):
+            raise ValueError("each candidate must be an object")
+        if item.get("reasoning"):
+            notes.append(f"{item.get('name')}: {item['reasoning']}")
+        parameters = item.get("parameters") or {}
+        candidates.append(
+            {
+                "name": str(item.get("name", "")).strip(),
+                "parameters": {k: _number_like(v) for k, v in parameters.items()},
+            }
+        )
+    reasoning = str(raw.get("reasoning") or " ".join(notes) or "").strip()
+    return {"candidates": candidates, "reasoning": reasoning[:2_000] or "LLM-configured search."}
+
+
+def _normalise_choice(raw: Any) -> dict[str, Any]:
+    """Repair format slips in a model choice (tradeoffs as objects, numbers as text)."""
+
+    if not isinstance(raw, dict):
+        raise ValueError("model choice must be a JSON object")
+    tradeoffs = []
+    for item in raw.get("tradeoffs") or []:
+        if isinstance(item, dict):
+            item = item.get("description") or json.dumps(item, sort_keys=True)
+        tradeoffs.append(str(item)[:300])
+    return {
+        "selected_model_name": str(raw.get("selected_model_name", "")).strip(),
+        "reasoning": str(raw.get("reasoning", "")).strip()[:2_000],
+        "tradeoffs": tradeoffs[:6],
+        "confidence": _number_like(raw.get("confidence", 0.5)),
+    }
+
+
 def plan_data_prep(
     *,
     schema: dict[str, str],
@@ -197,6 +300,12 @@ def plan_data_prep(
             from orchestrator.crew_agents import run_crew_decision
 
             available = set(schema) - {target_column}
+            cached = _from_cache(
+                "data_prep_plan", safe_input, DataPrepPlan, "Data Preparation Engineer", "crewai"
+            )
+            if cached is not None and set(cached.additional_exclusions) <= available:
+                update_span_io(span, output={**cached.model_dump(), "fallback_used": False})
+                return cached
 
             def check_plan(candidate: DataPrepPlan) -> None:
                 proposed = set(candidate.additional_exclusions)
@@ -229,6 +338,7 @@ def plan_data_prep(
                 validator=check_plan,
             )
             plan = plan.model_copy(update={"source": source})
+            _to_cache("data_prep_plan", safe_input, plan)
             update_span_io(span, output={**plan.model_dump(), "fallback_used": False})
             return plan
         except Exception as exc:
@@ -424,9 +534,12 @@ def plan_model_search(
     )
     prompt = (
         "Act as the model-search planning agent. Configure every model in the "
-        "catalog exactly once. Return JSON only with candidates (three objects, "
-        "each containing name and parameters) and reasoning. Respect every "
-        f"parameter bound. Context: {json.dumps(safe_input, sort_keys=True)}. "
+        "catalog exactly once. Return ONE JSON object only, shaped exactly like "
+        '{"candidates": [{"name": "<catalog name>", "parameters": {"<param>": '
+        '<number or null>}}, ...], "reasoning": "<why these settings>"}. '
+        "Use numbers, not strings, for parameter values; use only the parameters "
+        "listed for each model and respect every bound. "
+        f"Context: {json.dumps(safe_input, sort_keys=True)}. "
         f"Catalog: {json.dumps(catalog, sort_keys=True)}"
     )
     with traced_span(
@@ -438,13 +551,31 @@ def plan_model_search(
         try:
             if _offline():
                 raise RuntimeError("LLM_MODE is not live")
+            cached = _from_cache(
+                "model_search_plan", safe_input, ModelSearchPlan,
+                "Model Selection Agent (ADK)", "adk",
+            )
+            if cached is not None:
+                _validate_search_plan(cached, task_type)
+                update_span_io(span, output={**cached.model_dump(), "fallback_used": False})
+                return cached
             response, source = _call_live_llm(prompt, stage="model_search_plan")
-            plan = ModelSearchPlan.model_validate(_json_object(response))
+            plan = ModelSearchPlan.model_validate(_normalise_search_plan(_json_value(response)))
             _validate_search_plan(plan, task_type)
             plan = plan.model_copy(update={"source": source})
+            _to_cache("model_search_plan", safe_input, plan)
             update_span_io(span, output={**plan.model_dump(), "fallback_used": False})
             return plan
         except Exception as exc:
+            from orchestrator import usage
+
+            # Recorded so labels and reports show this decision used the policy.
+            usage.record(
+                stage="model_search_plan",
+                agent="Model Selection Agent (ADK)",
+                framework="adk",
+                source="fallback",
+            )
             update_span_io(
                 span,
                 output={
@@ -502,9 +633,10 @@ def choose_model(
     prompt = (
         "Act as the model-selection decision agent. Choose exactly one model from "
         "eligible_model_names using measured quality, training time, robustness, "
-        "and the prediction goal. Return JSON only with selected_model_name, "
-        "reasoning, tradeoffs (array), and confidence (0 to 1). You cannot choose "
-        "a model outside the eligible list. Evidence: "
+        "and the prediction goal. Return ONE JSON object only, shaped exactly like "
+        '{"selected_model_name": "<one eligible name>", "reasoning": "<why>", '
+        '"tradeoffs": ["<short sentence>", ...], "confidence": 0.8}. '
+        "You cannot choose a model outside the eligible list. Evidence: "
         f"{json.dumps(safe_input, sort_keys=True)}"
     )
     with traced_span(
@@ -516,16 +648,32 @@ def choose_model(
         try:
             if _offline():
                 raise RuntimeError("LLM_MODE is not live")
+            cached = _from_cache(
+                "model_choice", safe_input, ModelChoice, "Model Selection Agent (ADK)", "adk"
+            )
+            if cached is not None and cached.selected_model_name in eligible:
+                update_span_io(span, output={**cached.model_dump(), "fallback_used": False})
+                return cached
             response, source = _call_live_llm(prompt, stage="model_choice")
-            choice = ModelChoice.model_validate(_json_object(response))
+            choice = ModelChoice.model_validate(_normalise_choice(_json_value(response)))
             choice = choice.model_copy(update={"source": source})
             if choice.selected_model_name not in eligible:
                 raise ValueError("LLM selected a model outside the quality band")
             if not math.isfinite(choice.confidence):
                 raise ValueError("LLM confidence must be finite")
+            _to_cache("model_choice", safe_input, choice)
             update_span_io(span, output={**choice.model_dump(), "fallback_used": False})
             return choice
         except Exception as exc:
+            from orchestrator import usage
+
+            # Recorded so labels and reports show this decision used the policy.
+            usage.record(
+                stage="model_choice",
+                agent="Model Selection Agent (ADK)",
+                framework="adk",
+                source="fallback",
+            )
             update_span_io(
                 span,
                 output={

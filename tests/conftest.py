@@ -13,6 +13,11 @@ import pytest
 # Unit and integration tests exercise deterministic fallback adapters. Live LLM
 # behavior is verified separately through the local end-to-end demo.
 os.environ["LLM_MODE"] = "offline"
+# Tests must not reuse each other's decisions; cache tests opt back in.
+os.environ["LLM_CACHE"] = "off"
+# A developer's .env fallback chain (e.g. a local Ollama) must not leak into tests.
+os.environ["LLM_FALLBACK_CHAIN"] = ""
+os.environ["LLM_NARRATIVE_MODEL"] = ""
 
 
 @pytest.fixture

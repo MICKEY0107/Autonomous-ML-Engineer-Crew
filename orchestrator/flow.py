@@ -150,6 +150,23 @@ def _selection_metric(
     return name, float(value)
 
 
+def _usage_source(records: list[dict[str, Any]]) -> str:
+    """Summarise where the ADK agent's decisions came from (for honest labels)."""
+
+    # One outcome per decision stage: the last record written for that stage.
+    outcome: dict[str, str] = {}
+    for record in records:
+        outcome[str(record.get("stage", ""))] = str(record.get("source", ""))
+    sources = set(outcome.values())
+    if not sources or sources == {"fallback"}:
+        return "fallback"
+    if "fallback" in sources:
+        return "partial_fallback"
+    if sources == {"cache"}:
+        return "cache"
+    return "llm" if "llm" in sources else "secondary_llm"
+
+
 class AutonomousMLEngineerFlow(Flow[PipelineState]):
     """Typed CrewAI orchestration with a bounded evaluator-optimizer loop."""
 
@@ -425,7 +442,8 @@ class AutonomousMLEngineerFlow(Flow[PipelineState]):
                     output={
                         "reasoning": result.llm_reasoning,
                         # The ADK agent reports its live LLM calls; none = fallback policy.
-                        "fallback_used": not result.llm_usage,
+                        "fallback_used": _usage_source(result.llm_usage) == "fallback",
+                        "source": _usage_source(result.llm_usage),
                     },
                 )
             return result

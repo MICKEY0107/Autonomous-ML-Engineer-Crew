@@ -339,34 +339,52 @@ def reflect_on_evaluation(
                 raise RuntimeError("LLM_MODE is not live")
             from orchestrator.crew_agents import run_crew_decision
 
+            from orchestrator import decision_cache, usage
+
             def check(reflection: EvaluationReflection) -> None:
                 if not passed and not (reflection.retry_feedback or "").strip():
                     raise ValueError("the model failed the gate: retry_feedback is required")
 
-            reflection, source = run_crew_decision(
-                stage="evaluation_reflection",
-                role="Model Evaluation Engineer",
-                goal=(
-                    "Judge whether the selected model generalises and, if it failed "
-                    "the acceptance gate, tell the model-selection agent exactly what "
-                    "to change on the next attempt."
-                ),
-                backstory=(
-                    "You are a rigorous ML reviewer. You never change metric values "
-                    "or the pass/fail decision; you interpret them and give "
-                    "actionable, bounded advice (hyperparameters, regularisation, "
-                    "class weighting, model family)."
-                ),
-                task_description=(
-                    "Reflect on this held-out evaluation and return JSON with "
-                    "diagnosis, retry_feedback (required if passed is false, else "
-                    "null) and reasoning (3 short bullet points). Evidence: "
-                    f"{safe_input}"
-                ),
-                expected_output="An EvaluationReflection JSON object.",
-                output_model=EvaluationReflection,
-                validator=check,
-            )
+            reflection, source = None, "cache"
+            cached = decision_cache.get("evaluation_reflection", safe_input)
+            if cached is not None:
+                try:
+                    reflection = EvaluationReflection.model_validate(cached)
+                    check(reflection)
+                    usage.record(
+                        stage="evaluation_reflection",
+                        agent="Model Evaluation Engineer",
+                        framework="crewai",
+                        source="cache",
+                    )
+                except Exception:
+                    reflection = None
+            if reflection is None:
+                reflection, source = run_crew_decision(
+                    stage="evaluation_reflection",
+                    role="Model Evaluation Engineer",
+                    goal=(
+                        "Judge whether the selected model generalises and, if it failed "
+                        "the acceptance gate, tell the model-selection agent exactly what "
+                        "to change on the next attempt."
+                    ),
+                    backstory=(
+                        "You are a rigorous ML reviewer. You never change metric values "
+                        "or the pass/fail decision; you interpret them and give "
+                        "actionable, bounded advice (hyperparameters, regularisation, "
+                        "class weighting, model family)."
+                    ),
+                    task_description=(
+                        "Reflect on this held-out evaluation and return JSON with "
+                        "diagnosis, retry_feedback (required if passed is false, else "
+                        "null) and reasoning (3 short bullet points). Evidence: "
+                        f"{safe_input}"
+                    ),
+                    expected_output="An EvaluationReflection JSON object.",
+                    output_model=EvaluationReflection,
+                    validator=check,
+                )
+                decision_cache.put("evaluation_reflection", safe_input, reflection.model_dump())
             feedback = None
             if not passed:
                 feedback = f"{gate_feedback} Evaluator guidance: {reflection.retry_feedback}"
@@ -377,7 +395,15 @@ def reflect_on_evaluation(
             )
             return reasoning, feedback, source
         except Exception as exc:
-            reasoning = generate_evaluation_reasoning(metrics, passed, threshold, gate_feedback)
+            # Deterministic text: every provider already failed, so another
+            # LLM call here would only repeat the failure.
+            gate = "passed" if passed else "did not pass"
+            next_step = "before deployment" if passed else "in the next retry"
+            reasoning = (
+                f"- The held-out metrics {gate} the configured acceptance gate of {threshold:.4f}.\n"
+                "- The result reflects performance on data excluded from model fitting.\n"
+                f"- Review residual or class-level errors {next_step}."
+            )
             update_span_io(
                 span,
                 output={

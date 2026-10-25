@@ -401,9 +401,16 @@ class _ProgressExporter(SpanExporter):
                     .title()
                 )
                 # Show where the text really came from, not a fixed provider name.
+                source = span_output.get("source")
                 if span_output.get("fallback_used"):
                     tag = "[FALLBACK]"
-                elif span_output.get("source") == "secondary_llm":
+                elif source == "cache":
+                    tag = "[CACHE]"
+                elif source == "partial_fallback":
+                    tag = "[PARTIAL]"
+                elif source == "narrative_llm":
+                    tag = "[LOCAL-LLM]"
+                elif source == "secondary_llm":
                     tag = "[LLM-2ND]"
                 else:
                     tag = f"[{os.getenv('LLM_PROVIDER', 'llm').upper()}]"
@@ -674,7 +681,9 @@ def main(argv: list[str] | None = None) -> int:
     report = result.usage_report
     print(
         f"[USAGE]       runtime {result.runtime_seconds:.1f}s | "
-        f"{report.get('llm_requests', 0)} LLM calls, "
+        f"{report.get('llm_requests', 0)} LLM calls "
+        f"({report.get('local_llm_requests', 0)} local), "
+        f"{report.get('cache_hits', 0)} cache hits, "
         f"{report.get('llm_latency_seconds', 0):.1f}s in LLMs | "
         f"tokens in/out {result.input_tokens}/{result.output_tokens} | "
         f"est. cost ${result.estimated_cost_usd:.6f}",
@@ -683,6 +692,7 @@ def main(argv: list[str] | None = None) -> int:
     for agent, bucket in report.get("by_agent", {}).items():
         print(
             f"              - {agent}: {bucket['requests']} calls, "
+            f"{bucket.get('cache_hits', 0)} cached, "
             f"{bucket['total_tokens']} tokens, ${bucket['estimated_cost_usd']:.6f}",
             flush=True,
         )

@@ -99,6 +99,23 @@ for real decisions or `LLM_MODE=offline` for repeatable local tests.
 | 10 | Performance, cost, runtime | `orchestrator/usage.py` ledger → `PipelineResult.usage_report`, CLI `[USAGE]` line, dashboard cost card; held-out metrics per run |
 | 11 | Cloud deployment | Planned for Phase 3 (Docker + Cloud Run) |
 
+## Efficiency: provider chain, local LLM and decision cache
+
+Every LLM decision is kept; efficiency comes from *where* and *how often* it runs.
+
+| Mechanism | What it does | Config |
+|---|---|---|
+| Provider chain | Primary cloud model, then each fallback once, then the typed policy. No repeated retries against an overloaded or out-of-quota model. | `LLM_PROVIDER`, `CREWAI_MODEL`, `LLM_FALLBACK_CHAIN` |
+| Local LLM (Ollama) | `ollama/<model>` runs on your machine: no API cost, no quota, data never leaves the machine. Used as a fallback, or as primary with `LLM_PROVIDER=ollama`. | `ollama/qwen2.5-coder:latest` |
+| Narrative routing | The run summary (narration, not a decision) goes to the local model first. | `LLM_NARRATIVE_MODEL` |
+| Decision cache | An identical question (same row-free inputs, same model) reuses the validated answer from `artifacts/llm_cache/`. Hits are labelled `cache` in spans, CLI and the usage report. | `LLM_CACHE=on|off` |
+| Format repair | Smaller models' format slips (a bare list, numbers as strings) are normalised before validation; every bound is still enforced. | always on |
+| Per-provider cost | Local calls cost $0; cloud prices per provider. The usage report shows calls, local calls, cache hits and fallbacks. | `LLM_*_COST_PER_1M`, `<PROVIDER>_*_COST_PER_1M` |
+
+Typical runs (house prices, 500 rows): all five decisions on local Ollama in
+about 43–64 s at $0.00; with the cache warm about 38 s; with LLMs offline about 5 s.
+Run `scripts\llm_diag.py` to see which providers answer.
+
 ## Technology stack
 
 | Area | Technology |

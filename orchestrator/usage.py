@@ -35,7 +35,9 @@ class LLMUsageRecord(BaseModel):
     requests: int = Field(default=0, ge=0)
     latency_seconds: float = Field(default=0.0, ge=0)
     estimated_cost_usd: float = Field(default=0.0, ge=0)
-    source: str = Field(default="llm", description="llm | secondary_llm")
+    source: str = Field(
+        default="llm", description="llm | secondary_llm | narrative_llm | cache"
+    )
 
 
 _LOCK = threading.Lock()
@@ -49,10 +51,26 @@ def _price(name: str) -> float:
         return 0.0
 
 
-def estimate_cost(prompt_tokens: int, completion_tokens: int) -> float:
+LOCAL_PROVIDERS = frozenset({"ollama"})
+
+
+def _provider_price(provider: str, direction: str) -> float:
+    """USD per 1M tokens: ``<PROVIDER>_<DIR>_COST_PER_1M`` else the global price."""
+
+    specific = f"{provider.upper()}_{direction}_COST_PER_1M"
+    if provider and os.getenv(specific, "").strip():
+        return _price(specific)
+    return _price(f"LLM_{direction}_COST_PER_1M")
+
+
+def estimate_cost(prompt_tokens: int, completion_tokens: int, provider: str = "") -> float:
+    """Local models (Ollama) cost nothing per token; cloud uses configured prices."""
+
+    if provider.lower() in LOCAL_PROVIDERS:
+        return 0.0
     return round(
-        prompt_tokens / 1_000_000 * _price("LLM_INPUT_COST_PER_1M")
-        + completion_tokens / 1_000_000 * _price("LLM_OUTPUT_COST_PER_1M"),
+        prompt_tokens / 1_000_000 * _provider_price(provider, "INPUT")
+        + completion_tokens / 1_000_000 * _provider_price(provider, "OUTPUT"),
         8,
     )
 
@@ -68,7 +86,10 @@ def record(**fields: Any) -> LLMUsageRecord:
     prompt = int(fields.get("prompt_tokens", 0) or 0)
     completion = int(fields.get("completion_tokens", 0) or 0)
     fields.setdefault("total_tokens", prompt + completion)
-    fields.setdefault("estimated_cost_usd", estimate_cost(prompt, completion))
+    fields.setdefault(
+        "estimated_cost_usd",
+        estimate_cost(prompt, completion, str(fields.get("provider", "") or "")),
+    )
     entry = LLMUsageRecord.model_validate(fields)
     with _LOCK:
         _RECORDS.append(entry)
@@ -101,8 +122,15 @@ def summary(entries: list[LLMUsageRecord] | None = None) -> dict[str, Any]:
     for entry in entries:
         bucket = by_agent.setdefault(
             entry.agent,
-            {"total_tokens": 0, "requests": 0, "estimated_cost_usd": 0.0, "latency_seconds": 0.0},
+            {
+                "total_tokens": 0,
+                "requests": 0,
+                "cache_hits": 0,
+                "estimated_cost_usd": 0.0,
+                "latency_seconds": 0.0,
+            },
         )
+        bucket["cache_hits"] += 1 if entry.source == "cache" else 0
         bucket["total_tokens"] += entry.total_tokens
         bucket["requests"] += entry.requests
         bucket["estimated_cost_usd"] = round(bucket["estimated_cost_usd"] + entry.estimated_cost_usd, 8)
@@ -112,6 +140,11 @@ def summary(entries: list[LLMUsageRecord] | None = None) -> dict[str, Any]:
         "output_tokens": sum(e.completion_tokens for e in entries),
         "total_tokens": sum(e.total_tokens for e in entries),
         "llm_requests": sum(e.requests for e in entries),
+        "cache_hits": sum(1 for e in entries if e.source == "cache"),
+        "fallback_decisions": sum(1 for e in entries if e.source == "fallback"),
+        "local_llm_requests": sum(
+            e.requests for e in entries if e.provider.lower() in LOCAL_PROVIDERS
+        ),
         "llm_latency_seconds": round(sum(e.latency_seconds for e in entries), 3),
         "estimated_cost_usd": round(sum(e.estimated_cost_usd for e in entries), 8),
         "pricing": {

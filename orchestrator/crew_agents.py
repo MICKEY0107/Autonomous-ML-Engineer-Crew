@@ -36,19 +36,23 @@ GuardrailFn = Callable[[Any], tuple[bool, Any]]
 
 
 def _provider_chain() -> list[tuple[str, Any]]:
-    from orchestrator.llm_provider import crewai_llm, fallback_crewai_llm
+    """Primary, then every configured fallback (cloud or local Ollama)."""
+
+    from orchestrator.llm_provider import (
+        crewai_llm,
+        extra_fallback_llms,
+        fallback_crewai_llm,
+    )
 
     chain: list[tuple[str, Any]] = []
-    try:
-        chain.append(("llm", crewai_llm()))
-    except Exception:
-        pass  # primary not constructible (e.g. missing key): try the secondary
-    try:
-        secondary = fallback_crewai_llm()
-    except Exception:
-        secondary = None
-    if secondary is not None:
-        chain.append(("secondary_llm", secondary))
+    for source, factory in (("llm", crewai_llm), ("secondary_llm", fallback_crewai_llm)):
+        try:
+            built = factory()
+        except Exception:
+            built = None  # not constructible (e.g. missing key): skip it
+        if built is not None:
+            chain.append((source, built))
+    chain.extend(("secondary_llm", built) for built in extra_fallback_llms())
     return chain
 
 
@@ -101,6 +105,9 @@ def run_crew_decision(
             allow_delegation=False,
             verbose=False,
             max_iter=2,
+            # Fail fast on provider errors: move to the next provider instead
+            # of re-running the same overloaded model.
+            max_retry_limit=0,
         )
         task = Task(
             description=task_description,
