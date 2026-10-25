@@ -1,0 +1,27 @@
+# Python
+.venv/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+.coverage
+htmlcov/
+
+# Secrets
+.env
+
+# Generated run output
+mlruns/
+artifacts/
+output/
+tmp/
+.playwright-cli/
+.codex-doc-read/
+
+# Frontend
+ui/node_modules/
+ui/dist/
+ui/*.tsbuildinfo
+
+# Course-provided material (not ours to republish)
+Course_Handout__Agentic AI.pdf
+AG_AI_Project_Synopsis_Template.pdf

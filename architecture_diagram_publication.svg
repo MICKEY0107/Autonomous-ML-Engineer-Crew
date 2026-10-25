@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1330" viewBox="0 0 1800 1330" role="img" aria-labelledby="diagram-title diagram-desc">
+  <title id="diagram-title">Autonomous ML Engineer Crew architecture</title>
+  <desc id="diagram-desc">Publication-ready system diagram showing CrewAI orchestration, the Google ADK model-selection service, two MCP tools, safeguards, observability, evaluation evidence, and Google Cloud Run delivery.</desc>
+
+  <defs>
+    <style>
+      text { fill: #000000; font-family: "Segoe UI", Arial, sans-serif; }
+      .title { font-size: 38px; font-weight: 700; letter-spacing: -0.4px; }
+      .subtitle { font-size: 16px; font-weight: 400; }
+      .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; }
+      .section-label { font-size: 13px; font-weight: 700; letter-spacing: 1.7px; }
+      .card-title { font-size: 19px; font-weight: 700; }
+      .card-title-small { font-size: 17px; font-weight: 700; }
+      .body { font-size: 14px; font-weight: 400; }
+      .small { font-size: 12px; font-weight: 400; }
+      .micro { font-size: 11px; font-weight: 400; }
+      .stage { font-size: 12px; font-weight: 700; letter-spacing: 1px; }
+      .frame { fill: #ffffff; stroke: #000000; stroke-width: 2; }
+      .card { fill: #ffffff; stroke: #000000; stroke-width: 1.6; }
+      .service { fill: #ffffff; stroke: #000000; stroke-width: 2; stroke-dasharray: 9 6; }
+      .rule { stroke: #000000; stroke-width: 1.2; }
+      .connector { fill: none; stroke: #000000; stroke-width: 1.8; marker-end: url(#arrow); }
+      .connector-dashed { fill: none; stroke: #000000; stroke-width: 1.8; stroke-dasharray: 8 6; marker-end: url(#arrow); }
+      .bidir { fill: none; stroke: #000000; stroke-width: 1.8; marker-start: url(#arrow); marker-end: url(#arrow); }
+      .bidir-dashed { fill: none; stroke: #000000; stroke-width: 1.8; stroke-dasharray: 8 6; marker-start: url(#arrow); marker-end: url(#arrow); }
+      .bus { fill: none; stroke: #000000; stroke-width: 1.6; }
+      .assurance { fill: #ffffff; stroke: #000000; stroke-width: 2; stroke-dasharray: 10 7; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto-start-reverse" markerUnits="strokeWidth">
+      <path d="M1 1 L8 5 L1 9 Z" fill="#000000"/>
+    </marker>
+  </defs>
+
+  <rect width="1800" height="1330" fill="#ffffff"/>
+
+  <!-- Header -->
+  <text id="title" class="title" x="70" y="70">Autonomous ML Engineer Crew</text>
+  <text class="subtitle" x="70" y="103">Typed multi-agent ML workflow with explicit CrewAI–ADK interoperability, MCP tools, safeguards, traceability, evaluation, and cloud delivery</text>
+  <line class="rule" x1="70" y1="128" x2="1730" y2="128"/>
+
+  <!-- User request -->
+  <rect class="card" x="70" y="180" width="220" height="130"/>
+  <text class="eyebrow" x="92" y="208">USER REQUEST</text>
+  <line class="rule" x1="92" y1="220" x2="268" y2="220"/>
+  <text class="body" x="92" y="246">CSV dataset</text>
+  <text class="body" x="92" y="270">Target column</text>
+  <text class="body" x="92" y="294">Prediction goal</text>
+
+  <!-- CrewAI control plane -->
+  <rect class="frame" x="340" y="155" width="1390" height="175"/>
+  <text class="section-label" x="370" y="184">01 · CREWAI CONTROL PLANE</text>
+
+  <rect class="card" x="370" y="205" width="360" height="95"/>
+  <text class="card-title-small" x="392" y="234">Orchestrator</text>
+  <text class="small" x="392" y="259">Sequences stages and validates every handoff</text>
+  <text class="small" x="392" y="280">Owns A2A calls, bounded retuning, and terminal status</text>
+
+  <rect class="card" x="770" y="205" width="430" height="95"/>
+  <text class="card-title-small" x="792" y="234">Pydantic PipelineState</text>
+  <text class="small" x="792" y="259">Run ID · task · target · status · retry count</text>
+  <text class="small" x="792" y="280">Artifact references · trace ID · validated results</text>
+
+  <rect class="card" x="1240" y="205" width="460" height="95"/>
+  <text class="eyebrow" x="1262" y="228">ORCHESTRATOR OUTPUT</text>
+  <text class="card-title-small" x="1262" y="251">Final PipelineResult</text>
+  <text class="small" x="1262" y="274">JSON + Markdown · endpoint · lineage · trace</text>
+  <text class="small" x="1262" y="291">Evaluation evidence · runtime · token and cost summary</text>
+
+  <path class="connector" d="M290 245 H370"/>
+
+  <!-- Orchestration bus -->
+  <path class="bus" d="M550 300 V360"/>
+  <path class="bus" d="M480 360 H1540"/>
+  <text class="small" x="575" y="350">CrewAI dispatch · typed state updates · validated results</text>
+  <path class="bidir" d="M480 368 V410"/>
+  <path class="bidir-dashed" d="M840 368 V410"/>
+  <text class="micro" x="856" y="390">A2A request / result</text>
+  <path class="bidir" d="M1200 368 V410"/>
+  <path class="bidir" d="M1540 368 V410"/>
+
+  <!-- Agent execution row -->
+  <text class="section-label" x="70" y="395">02 · AGENT EXECUTION</text>
+
+  <rect class="card" x="350" y="410" width="260" height="210"/>
+  <text class="eyebrow" x="372" y="440">CREWAI AGENT</text>
+  <text class="stage" x="566" y="440">01</text>
+  <line class="rule" x1="372" y1="453" x2="588" y2="453"/>
+  <text class="card-title" x="372" y="486">Data-Prep Agent</text>
+  <text class="body" x="372" y="520">Validates CSV and target</text>
+  <text class="body" x="372" y="546">Profiles and cleans data</text>
+  <text class="body" x="372" y="572">Creates prepared-data artifact</text>
+  <text class="body" x="372" y="598">Returns DataPrepResult</text>
+
+  <rect class="service" x="690" y="410" width="300" height="210"/>
+  <text class="eyebrow" x="712" y="440">GOOGLE ADK · A2A SERVICE</text>
+  <text class="stage" x="946" y="440">02</text>
+  <line class="rule" x1="712" y1="453" x2="968" y2="453"/>
+  <text class="card-title" x="712" y="486">Model Selection</text>
+  <text class="card-title" x="712" y="510">and Tuning Agent</text>
+  <text class="body" x="712" y="544">Trains candidate models</text>
+  <text class="body" x="712" y="570">Runs bounded tuning</text>
+  <text class="body" x="712" y="596">Returns typed result to Orchestrator</text>
+
+  <rect class="card" x="1070" y="410" width="260" height="210"/>
+  <text class="eyebrow" x="1092" y="440">CREWAI AGENT</text>
+  <text class="stage" x="1286" y="440">03</text>
+  <line class="rule" x1="1092" y1="453" x2="1308" y2="453"/>
+  <text class="card-title" x="1092" y="486">Evaluation Agent</text>
+  <text class="body" x="1092" y="520">Runs held-out evaluation</text>
+  <text class="body" x="1092" y="546">Applies metric and threshold</text>
+  <text class="body" x="1092" y="572">Returns EvaluationResult:</text>
+  <text class="body" x="1092" y="598">pass or bounded-retune request</text>
+
+  <rect class="card" x="1410" y="410" width="260" height="210"/>
+  <text class="eyebrow" x="1432" y="440">CREWAI AGENT</text>
+  <text class="stage" x="1626" y="440">04</text>
+  <line class="rule" x1="1432" y1="453" x2="1648" y2="453"/>
+  <text class="card-title" x="1432" y="486">Deployment and</text>
+  <text class="card-title" x="1432" y="510">Observability Agent</text>
+  <text class="body" x="1432" y="544">Packages accepted model</text>
+  <text class="body" x="1432" y="570">Deploys and smoke-tests API</text>
+  <text class="body" x="1432" y="596">Returns DeploymentResult</text>
+
+  <!-- Integration row -->
+  <text class="section-label" x="70" y="735">03 · TOOLS AND VERIFIED OUTCOMES</text>
+
+  <rect class="card" x="350" y="760" width="260" height="165"/>
+  <text class="eyebrow" x="372" y="790">MCP TOOL 01</text>
+  <line class="rule" x1="372" y1="803" x2="588" y2="803"/>
+  <text class="card-title-small" x="372" y="832">Dataset Profile</text>
+  <text class="small" x="372" y="858">Schema and type checks</text>
+  <text class="small" x="372" y="880">Missingness and leakage checks</text>
+  <text class="small" x="372" y="902">Dataset hash</text>
+
+  <rect class="card" x="690" y="760" width="300" height="165"/>
+  <text class="eyebrow" x="712" y="790">MCP TOOL 02</text>
+  <line class="rule" x1="712" y1="803" x2="968" y2="803"/>
+  <text class="card-title-small" x="712" y="832">MLflow Experiment</text>
+  <text class="small" x="712" y="858">Log metrics and parameters</text>
+  <text class="small" x="712" y="880">Register model artifacts</text>
+  <text class="small" x="712" y="902">Query best run</text>
+
+  <rect class="card" x="1070" y="760" width="260" height="165"/>
+  <text class="eyebrow" x="1092" y="790">EVALUATION OUTPUT</text>
+  <line class="rule" x1="1092" y1="803" x2="1308" y2="803"/>
+  <text class="card-title-small" x="1092" y="832">Evaluation Evidence</text>
+  <text class="small" x="1092" y="858">Model quality and task success</text>
+  <text class="small" x="1092" y="880">Retries and failure-path results</text>
+  <text class="small" x="1092" y="902">p50/p95 runtime · tokens · cost</text>
+
+  <rect class="card" x="1410" y="760" width="260" height="165"/>
+  <text class="eyebrow" x="1432" y="790">DEPLOYMENT TARGET</text>
+  <line class="rule" x1="1432" y1="803" x2="1648" y2="803"/>
+  <text class="card-title-small" x="1432" y="832">Google Cloud Run</text>
+  <text class="small" x="1432" y="858">Dockerized FastAPI service</text>
+  <text class="small" x="1432" y="880">/health · authenticated /predict</text>
+  <text class="small" x="1432" y="902">Revision · health · smoke-test evidence</text>
+
+  <path class="bidir" d="M480 620 V760"/>
+  <text class="micro" x="490" y="711">MCP call</text>
+  <path class="bidir" d="M840 620 V760"/>
+  <text class="micro" x="850" y="711">MCP call</text>
+  <path class="connector" d="M1200 620 V760"/>
+  <text class="micro" x="1210" y="711">evidence</text>
+  <path class="connector" d="M1540 620 V760"/>
+  <text class="micro" x="1550" y="711">deploy</text>
+
+  <!-- Cross-cutting assurance plane -->
+  <text class="section-label" x="70" y="985">04 · CROSS-CUTTING ASSURANCE PLANE</text>
+  <rect class="assurance" x="350" y="1010" width="1320" height="210"/>
+  <text class="small" x="380" y="1040">Applies to user input, CrewAI Flow, every agent, A2A and MCP calls, LLM operations, evaluation, and the deployed API.</text>
+
+  <rect class="card" x="380" y="1060" width="600" height="130"/>
+  <text class="card-title-small" x="402" y="1090">Callbacks and Guardrails</text>
+  <line class="rule" x1="402" y1="1103" x2="958" y2="1103"/>
+  <text class="small" x="402" y="1130">Lifecycle, intermediate-output, validation, and error events</text>
+  <text class="small" x="402" y="1152">Injection and toxicity screening · Pydantic fail-closed checks</text>
+  <text class="small" x="402" y="1174">Secret redaction · raw-row and sensitive-data controls</text>
+
+  <rect class="card" x="1040" y="1060" width="600" height="130"/>
+  <text class="card-title-small" x="1062" y="1090">Trace and Provenance</text>
+  <line class="rule" x1="1062" y1="1103" x2="1618" y2="1103"/>
+  <text class="small" x="1062" y="1130">Langfuse and OpenTelemetry spans across the complete run</text>
+  <text class="small" x="1062" y="1152">Shared run ID · MLflow model lineage · artifact and version links</text>
+  <text class="small" x="1062" y="1174">Latency · tokens · cost · errors · retries · deployment revision</text>
+
+  <!-- Footer -->
+  <line class="rule" x1="70" y1="1260" x2="1730" y2="1260"/>
+  <text class="micro" x="70" y="1286">Agentic frameworks: CrewAI and Google ADK only · Supporting standards and libraries: Pydantic, MCP, A2A, MLflow, Langfuse, OpenTelemetry, FastAPI, Docker, and Google Cloud Run</text>
+  <text class="micro" x="70" y="1306">Execution order is left to right; every dispatch, result, conditional route, and bounded retune is controlled by the Orchestrator through PipelineState.</text>
+</svg>

@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <style>
+      .bg { fill: #f6f8fb; }
+      .title { font: 700 36px Arial, sans-serif; fill: #172033; }
+      .subtitle { font: 400 18px Arial, sans-serif; fill: #5a6475; }
+      .section-title { font: 700 21px Arial, sans-serif; fill: #1c2c4a; }
+      .small-title { font: 700 18px Arial, sans-serif; fill: #1c2c4a; }
+      .body { font: 400 15px Arial, sans-serif; fill: #2f3a4d; }
+      .small { font: 400 13px Arial, sans-serif; fill: #506078; }
+      .chip { font: 700 13px Arial, sans-serif; fill: #234066; }
+      .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; rx: 14; }
+      .input { fill: #fff7ed; stroke: #fdba74; }
+      .crew { fill: #eef6ff; stroke: #60a5fa; stroke-width: 3; rx: 22; }
+      .adk { fill: #f0fdf4; stroke: #86efac; stroke-width: 3; rx: 22; }
+      .agent { fill: #ffffff; stroke: #8fb7dc; stroke-width: 2; rx: 14; }
+      .eval { fill: #ffffff; stroke: #f59e0b; stroke-width: 2; rx: 14; }
+      .deploy { fill: #ffffff; stroke: #14b8a6; stroke-width: 2; rx: 14; }
+      .output { fill: #f8fafc; stroke: #94a3b8; stroke-width: 2; rx: 14; }
+      .tool { fill: #ffffff; stroke: #d8dee9; stroke-width: 1.8; rx: 12; }
+      .decision { fill: #fff7ed; stroke: #fb923c; stroke-width: 2; }
+      .arrow { stroke: #334155; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .loop { stroke: #dc2626; stroke-width: 2.8; fill: none; marker-end: url(#arrow-red); stroke-dasharray: 7 7; }
+      .handoff { stroke: #2563eb; stroke-width: 2.5; fill: none; marker-end: url(#arrow-blue); }
+      .note { fill: #ffffff; stroke: #dbe4ef; stroke-width: 1.5; rx: 12; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#334155" />
+    </marker>
+    <marker id="arrow-blue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#2563eb" />
+    </marker>
+    <marker id="arrow-red" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#dc2626" />
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="1000" />
+
+  <text class="title" x="80" y="70">Autonomous ML Engineer Crew - Architecture</text>
+  <text class="subtitle" x="80" y="104">A CrewAI-orchestrated, Google ADK powered multi-agent pipeline for automated model building, evaluation, and deployment</text>
+
+  <rect class="input card" x="70" y="190" width="240" height="245" />
+  <text class="section-title" x="95" y="228">User Input</text>
+  <text class="body" x="95" y="267">Raw CSV dataset</text>
+  <text class="body" x="95" y="300">Target column</text>
+  <text class="body" x="95" y="333">Prediction goal</text>
+  <text class="body" x="95" y="366">Task type:</text>
+  <text class="small" x="115" y="393">Classification or regression</text>
+
+  <rect class="crew" x="370" y="160" width="1010" height="250" />
+  <text class="section-title" x="400" y="200">CrewAI Flow Layer</text>
+  <text class="body" x="400" y="232">Owns orchestration, shared state, sequencing, conditional routing, and the bounded retry loop.</text>
+
+  <rect class="note" x="410" y="265" width="255" height="95" />
+  <text class="small-title" x="435" y="296">Shared Pipeline State</text>
+  <text class="small" x="435" y="323">Dataset path, target column,</text>
+  <text class="small" x="435" y="345">metrics, model artifact, status</text>
+
+  <rect class="note" x="710" y="265" width="255" height="95" />
+  <text class="small-title" x="735" y="296">Control Policy</text>
+  <text class="small" x="735" y="323">Agent order, pass/fail gate,</text>
+  <text class="small" x="735" y="345">retry budget, failure handling</text>
+
+  <rect class="note" x="1010" y="265" width="305" height="95" />
+  <text class="small-title" x="1035" y="296">Agent Handoffs</text>
+  <text class="small" x="1035" y="323">Each stage reasons, records output,</text>
+  <text class="small" x="1035" y="345">and passes context to the next agent</text>
+
+  <rect class="adk" x="120" y="500" width="1270" height="305" />
+  <text class="section-title" x="150" y="540">Google ADK Specialist Agent Layer</text>
+  <text class="body" x="150" y="570">Defines specialist agents, exposes tools, and extends the google/adk-samples machine-learning-engineering core.</text>
+
+  <rect class="agent" x="160" y="610" width="225" height="135" />
+  <text class="small-title" x="185" y="645">Data-Prep Agent</text>
+  <text class="small" x="185" y="675">Ingests dataset</text>
+  <text class="small" x="185" y="697">Cleans missing values</text>
+  <text class="small" x="185" y="719">Engineers features</text>
+
+  <rect class="agent" x="430" y="610" width="250" height="135" />
+  <text class="small-title" x="455" y="645">Model-Selection &amp;</text>
+  <text class="small-title" x="455" y="668">Tuning Agent</text>
+  <text class="small" x="455" y="698">Trains candidates</text>
+  <text class="small" x="455" y="720">Tunes hyperparameters</text>
+
+  <rect class="eval" x="725" y="610" width="225" height="135" />
+  <text class="small-title" x="750" y="645">Evaluation Agent</text>
+  <text class="small" x="750" y="675">Runs held-out validation</text>
+  <text class="small" x="750" y="697">Computes metrics</text>
+  <text class="small" x="750" y="719">Writes report card</text>
+
+  <polygon class="decision" points="1045,618 1125,678 1045,738 965,678" />
+  <text class="small-title" x="1045" y="670" text-anchor="middle">Pass</text>
+  <text class="small-title" x="1045" y="692" text-anchor="middle">quality gate?</text>
+
+  <rect class="deploy" x="1165" y="610" width="185" height="135" />
+  <text class="small-title" x="1190" y="645">Deployment /</text>
+  <text class="small-title" x="1190" y="668">Observability Agent</text>
+  <text class="small" x="1190" y="698">Packages model</text>
+  <text class="small" x="1190" y="720">Serves and monitors API</text>
+
+  <rect class="output card" x="1430" y="250" width="115" height="495" />
+  <text class="section-title" x="1452" y="290">Outputs</text>
+  <text class="small" x="1450" y="335">Trained</text>
+  <text class="small" x="1450" y="355">model</text>
+  <text class="small" x="1450" y="410">Live</text>
+  <text class="small" x="1450" y="430">/predict</text>
+  <text class="small" x="1450" y="450">API</text>
+  <text class="small" x="1450" y="505">Model</text>
+  <text class="small" x="1450" y="525">report</text>
+  <text class="small" x="1450" y="545">card</text>
+  <text class="small" x="1450" y="600">Usage</text>
+  <text class="small" x="1450" y="620">and error</text>
+  <text class="small" x="1450" y="640">monitoring</text>
+  <text class="small" x="1450" y="695">Reusable</text>
+  <text class="small" x="1450" y="715">pipeline</text>
+
+  <path class="arrow" d="M310 312 C340 312, 340 312, 370 312" />
+  <path class="handoff" d="M530 410 L270 610" />
+  <path class="handoff" d="M385 678 L430 678" />
+  <path class="handoff" d="M680 678 L725 678" />
+  <path class="handoff" d="M950 678 L965 678" />
+  <path class="handoff" d="M1125 678 L1165 678" />
+  <path class="arrow" d="M1350 678 C1390 678, 1390 500, 1430 500" />
+  <path class="loop" d="M1045 738 C1045 805, 555 805, 555 745" />
+
+  <text class="chip" x="1134" y="662">YES</text>
+  <text class="chip" x="875" y="797" fill="#dc2626">NO: feedback returns for another tuning attempt</text>
+
+  <rect class="card" x="70" y="850" width="1475" height="95" />
+  <text class="section-title" x="100" y="890">Technology and Tooling</text>
+  <rect class="tool" x="360" y="866" width="150" height="48" />
+  <text class="chip" x="435" y="896" text-anchor="middle">Gemini</text>
+  <rect class="tool" x="535" y="866" width="195" height="48" />
+  <text class="chip" x="632" y="896" text-anchor="middle">pandas + scikit-learn</text>
+  <rect class="tool" x="755" y="866" width="150" height="48" />
+  <text class="chip" x="830" y="896" text-anchor="middle">MLflow</text>
+  <rect class="tool" x="930" y="866" width="150" height="48" />
+  <text class="chip" x="1005" y="896" text-anchor="middle">Docker</text>
+  <rect class="tool" x="1105" y="866" width="150" height="48" />
+  <text class="chip" x="1180" y="896" text-anchor="middle">FastAPI</text>
+  <rect class="tool" x="1280" y="866" width="150" height="48" />
+  <text class="chip" x="1355" y="896" text-anchor="middle">Optional MCP</text>
+
+  <text class="small" x="100" y="925">Base implementation reference: google/adk-samples/python/agents/machine-learning-engineering</text>
+</svg>
