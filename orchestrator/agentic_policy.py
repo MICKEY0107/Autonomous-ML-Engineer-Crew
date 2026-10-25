@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from orchestrator.telemetry import traced_span, update_span_io
 
 
-DecisionSource = Literal["llm", "fallback"]
+DecisionSource = Literal["llm", "secondary_llm", "fallback"]
 
 
 def crewai_llm() -> Any:
@@ -30,18 +30,54 @@ def crewai_llm() -> Any:
     return build_llm()
 
 
-def _call_live_llm(prompt: str) -> Any:
-    """Call the primary LLM, then an independent provider on API failure."""
+def _record_llm_usage(llm: Any, *, stage: str, source: str, elapsed: float) -> None:
+    from orchestrator import usage
 
     try:
-        return crewai_llm().call(prompt)
+        metrics = llm.get_token_usage_summary()
+    except Exception:
+        return
+    usage.record(
+        stage=stage,
+        agent="Model Selection Agent (ADK)",
+        framework="adk",
+        provider=str(getattr(llm, "provider", "") or ""),
+        model=str(getattr(llm, "model", "") or ""),
+        prompt_tokens=metrics.prompt_tokens,
+        completion_tokens=metrics.completion_tokens,
+        total_tokens=metrics.total_tokens,
+        requests=metrics.successful_requests,
+        latency_seconds=round(elapsed, 3),
+        source=source,
+    )
+
+
+def _call_live_llm(prompt: str, *, stage: str = "decision") -> tuple[Any, str]:
+    """Call the primary LLM, then an independent provider on API failure.
+
+    Returns (response, source) where source is ``llm`` or ``secondary_llm``.
+    """
+
+    import time
+
+    started = time.perf_counter()
+    try:
+        llm = crewai_llm()
+        response = llm.call(prompt)
+        _record_llm_usage(llm, stage=stage, source="llm", elapsed=time.perf_counter() - started)
+        return response, "llm"
     except Exception:
         from orchestrator.llm_provider import fallback_crewai_llm
 
         fallback = fallback_crewai_llm()
         if fallback is None:
             raise
-        return fallback.call(prompt)
+        started = time.perf_counter()
+        response = fallback.call(prompt)
+        _record_llm_usage(
+            fallback, stage=stage, source="secondary_llm", elapsed=time.perf_counter() - started
+        )
+        return response, "secondary_llm"
 
 
 class DataPrepPlan(BaseModel):
@@ -158,13 +194,41 @@ def plan_data_prep(
         try:
             if _offline():
                 raise RuntimeError("LLM_MODE is not live")
-            plan = DataPrepPlan.model_validate(_json_object(_call_live_llm(prompt)))
+            from orchestrator.crew_agents import run_crew_decision
+
             available = set(schema) - {target_column}
-            proposed = set(plan.additional_exclusions)
-            if not proposed.issubset(available):
-                raise ValueError("data-prep plan referenced an unknown or target column")
-            if len(proposed) >= len(available):
-                raise ValueError("data-prep plan would remove every feature")
+
+            def check_plan(candidate: DataPrepPlan) -> None:
+                proposed = set(candidate.additional_exclusions)
+                if not proposed.issubset(available):
+                    raise ValueError(
+                        "additional_exclusions may only name these columns: "
+                        f"{sorted(available)}"
+                    )
+                if len(proposed) >= len(available):
+                    raise ValueError("the plan would remove every feature")
+
+            # Real CrewAI execution: Agent + Task(output_pydantic, guardrail) + Crew.
+            plan, source = run_crew_decision(
+                stage="data_prep_plan",
+                role="Data Preparation Engineer",
+                goal=(
+                    "Decide how this tabular dataset should be cleaned and split so "
+                    "the model generalises without leakage."
+                ),
+                backstory=(
+                    "You are a careful data engineer. You only see schema-level "
+                    "metadata, never raw rows, and you justify every action."
+                ),
+                task_description=prompt,
+                expected_output=(
+                    "A DataPrepPlan JSON object: additional_exclusions, test_size, "
+                    "numeric_imputation, categorical_imputation, reasoning."
+                ),
+                output_model=DataPrepPlan,
+                validator=check_plan,
+            )
+            plan = plan.model_copy(update={"source": source})
             update_span_io(span, output={**plan.model_dump(), "fallback_used": False})
             return plan
         except Exception as exc:
@@ -374,8 +438,10 @@ def plan_model_search(
         try:
             if _offline():
                 raise RuntimeError("LLM_MODE is not live")
-            plan = ModelSearchPlan.model_validate(_json_object(_call_live_llm(prompt)))
+            response, source = _call_live_llm(prompt, stage="model_search_plan")
+            plan = ModelSearchPlan.model_validate(_json_object(response))
             _validate_search_plan(plan, task_type)
+            plan = plan.model_copy(update={"source": source})
             update_span_io(span, output={**plan.model_dump(), "fallback_used": False})
             return plan
         except Exception as exc:
@@ -450,7 +516,9 @@ def choose_model(
         try:
             if _offline():
                 raise RuntimeError("LLM_MODE is not live")
-            choice = ModelChoice.model_validate(_json_object(_call_live_llm(prompt)))
+            response, source = _call_live_llm(prompt, stage="model_choice")
+            choice = ModelChoice.model_validate(_json_object(response))
+            choice = choice.model_copy(update={"source": source})
             if choice.selected_model_name not in eligible:
                 raise ValueError("LLM selected a model outside the quality band")
             if not math.isfinite(choice.confidence):

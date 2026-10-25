@@ -25,3 +25,6 @@ ui/*.tsbuildinfo
 # Course-provided material (not ours to republish)
 Course_Handout__Agentic AI.pdf
 AG_AI_Project_Synopsis_Template.pdf
+
+# Office lock files
+~$*

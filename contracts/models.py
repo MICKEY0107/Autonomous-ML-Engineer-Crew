@@ -11,7 +11,7 @@ import math
 import re
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 from uuid import UUID
@@ -183,6 +183,8 @@ class ModelSelectionResult(ContractModel):
     best_parameters: dict[NonBlankString, JsonScalar] = Field(default_factory=dict)
     training_metrics: MetricMap
     llm_reasoning: str = ""
+    # Token/latency records of the ADK agent's LLM decisions (no row data).
+    llm_usage: list[dict[str, Any]] = Field(default_factory=list)
 
     @property
     def best_model_name(self) -> str:
@@ -402,6 +404,8 @@ class PipelineResult(ContractModel):
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
     estimated_cost_usd: float = Field(default=0, ge=0)
+    # Per-agent tokens, requests, latency and cost (see orchestrator/usage.py).
+    usage_report: dict[str, Any] = Field(default_factory=dict)
     error: NonBlankString | None = None
     llm_summary: str = ""
     completed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

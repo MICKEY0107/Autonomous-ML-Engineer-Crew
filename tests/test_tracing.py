@@ -275,14 +275,13 @@ def test_a2a_span_has_task_retry_attributes_and_propagates_traceparent(
     flow = AutonomousMLEngineerFlow(initial_state=state, suppress_flow_events=True)
     captured_headers: dict[str, str] = {}
 
-    class FakeResponse:
-        status_code = 200
+    def send(base_url: str, payload: dict, **kwargs: object):
+        from contracts.models import ModelSelectionResult
+        from orchestrator.a2a_client import A2ACallInfo
 
-        def raise_for_status(self) -> None:
-            return None
-
-        def json(self) -> dict[str, object]:
-            return {
+        captured_headers.update(kwargs["headers"])
+        result = ModelSelectionResult.model_validate(
+            {
                 "run_id": str(RUN_ID),
                 "candidate_run_ids": ["candidate-1"],
                 "best_run_id": "candidate-1",
@@ -290,20 +289,25 @@ def test_a2a_span_has_task_retry_attributes_and_propagates_traceparent(
                 "best_parameters": {"model_type": "random_forest"},
                 "training_metrics": {"f1_weighted": 0.91},
             }
+        )
+        info = A2ACallInfo(
+            agent_name="model_selection_agent",
+            task_id="task-1",
+            task_state="TASK_STATE_COMPLETED",
+        )
+        return result, info
 
-    def post(*args: object, **kwargs: object) -> FakeResponse:
-        captured_headers.update(kwargs["headers"])
-        return FakeResponse()
-
-    monkeypatch.setattr("orchestrator.flow.httpx.post", post)
+    monkeypatch.setattr("orchestrator.flow.send_model_selection_task", send)
     with pipeline_trace(RUN_ID):
         with traced_span("agent.model_selection"):
             flow._post_model_selection("Improve recall")
 
     spans = {span.name: span for span in _EXPORTER.get_finished_spans()}
-    a2a = spans["a2a.tasks.send"]
+    a2a = spans["a2a.message.send"]
     assert a2a.attributes["ml.task_type"] == "classification"
     assert a2a.attributes["ml.retry_count"] == 1
+    assert a2a.attributes["rpc.method"] == "SendMessage"
+    assert a2a.attributes["a2a.task.state"] == "TASK_STATE_COMPLETED"
     assert captured_headers["traceparent"].split("-")[1] == RUN_ID.hex
     assert json.loads(a2a.attributes["langfuse.observation.input"]) == {
         "retry_count": 1,

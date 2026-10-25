@@ -24,11 +24,23 @@ class _FailingLlm:
         raise RuntimeError("primary provider unavailable")
 
 
+def _fake_crew(payload: dict[str, object]):
+    """Stand-in for orchestrator.crew_agents.run_crew_decision (no network)."""
+
+    def run(*, output_model, validator=None, **_kwargs):
+        decision = output_model.model_validate(payload)
+        if validator is not None:
+            validator(decision)
+        return decision, "llm"
+
+    return run
+
+
 def test_data_prep_plan_is_typed_and_executable(monkeypatch) -> None:
     monkeypatch.setenv("LLM_MODE", "live")
     monkeypatch.setattr(
-        "orchestrator.agentic_policy.crewai_llm",
-        lambda: _FakeLlm(
+        "orchestrator.crew_agents.run_crew_decision",
+        _fake_crew(
             {
                 "additional_exclusions": ["record_id"],
                 "test_size": 0.25,
@@ -58,8 +70,8 @@ def test_data_prep_plan_is_typed_and_executable(monkeypatch) -> None:
 def test_data_prep_plan_fails_closed_on_unknown_column(monkeypatch) -> None:
     monkeypatch.setenv("LLM_MODE", "live")
     monkeypatch.setattr(
-        "orchestrator.agentic_policy.crewai_llm",
-        lambda: _FakeLlm(
+        "orchestrator.crew_agents.run_crew_decision",
+        _fake_crew(
             {
                 "additional_exclusions": ["not_a_column"],
                 "test_size": 0.25,
@@ -257,24 +269,26 @@ def test_agentic_decision_uses_secondary_llm_on_primary_api_failure(
         "orchestrator.llm_provider.fallback_crewai_llm",
         lambda: _FakeLlm(
             {
-                "additional_exclusions": ["record_id"],
-                "test_size": 0.2,
-                "numeric_imputation": "median",
-                "categorical_imputation": "most_frequent",
-                "reasoning": "The alternate provider supplied a safe plan.",
+                "selected_model_name": "random_forest",
+                "reasoning": "The alternate provider chose the robust ensemble.",
+                "tradeoffs": [],
+                "confidence": 0.7,
             }
         ),
     )
 
-    plan = plan_data_prep(
-        schema={"record_id": "int64", "x": "float64", "target": "str"},
-        null_counts={"record_id": 0, "x": 0, "target": 0},
-        leakage_candidates=["record_id"],
-        row_count=100,
-        target_column="target",
+    choice = choose_model(
+        candidates=[
+            {"name": "logistic_regression", "metric_value": 0.93, "training_time_ms": 20},
+            {"name": "random_forest", "metric_value": 0.93, "training_time_ms": 80},
+            {"name": "gradient_boosting", "metric_value": 0.80, "training_time_ms": 90},
+        ],
+        task_type="classification",
+        primary_metric="f1_weighted",
+        maximize=True,
         prediction_goal="classify target",
-        requested_test_size=0.2,
+        retry_feedback=None,
     )
 
-    assert plan.source == "llm"
-    assert plan.additional_exclusions == ["record_id"]
+    assert choice.source == "secondary_llm"
+    assert choice.selected_model_name == "random_forest"

@@ -28,6 +28,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
 from contracts.models import PipelineResult, PipelineState, PipelineStatus, TaskType
 from main import create_pipeline_state
 from orchestrator.flow import FlowCallbackEvent, FlowCallbacks, build_flow
+from orchestrator import usage
 from orchestrator.llm_reasoning import generate_pipeline_summary
 from orchestrator.telemetry import (
     flush_traces,
@@ -39,7 +40,7 @@ from orchestrator.telemetry import (
 DATA_PATH = PROJECT_ROOT / "data" / "house_prices.csv"
 A2A_HOST = os.environ["A2A_BIND_HOST"]
 A2A_PORT = int(os.environ["A2A_BIND_PORT"])
-A2A_URL = os.environ["A2A_TASKS_URL"]
+A2A_URL = os.getenv("A2A_AGENT_URL") or os.environ["A2A_TASKS_URL"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -318,6 +319,7 @@ def _pipeline_result(
         state.retry_count,
         elapsed_seconds,
     )
+    usage_report = usage.summary()
     return PipelineResult(
         run_id=state.run_id,
         status="evaluation_completed" if succeeded else "failed",
@@ -328,6 +330,10 @@ def _pipeline_result(
         runtime_seconds=elapsed_seconds,
         error=error,
         llm_summary=summary,
+        input_tokens=usage_report["input_tokens"],
+        output_tokens=usage_report["output_tokens"],
+        estimated_cost_usd=usage_report["estimated_cost_usd"],
+        usage_report=usage_report,
     )
 
 

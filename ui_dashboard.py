@@ -264,7 +264,7 @@ class _DashboardSpanExporter(SpanExporter):
                 "agent.data_prep",
                 "mcp.profile_dataset",
                 "agent.model_selection",
-                "a2a.tasks.send",
+                "a2a.message.send",
                 "agent.evaluation",
             }:
                 continue
@@ -496,7 +496,7 @@ def _process_span(event: Mapping[str, Any]) -> None:
             ),
             duration=duration,
         )
-    elif name == "a2a.tasks.send":
+    elif name == "a2a.message.send":
         _update_stage(
             "a2a",
             status="success",
@@ -860,7 +860,7 @@ def _render_traces_tab(state: PipelineState | None) -> None:
 ├── agent.data_prep → Input: csv_path, target_column | Output: train_path, test_path, row_count
 │   └── mcp.profile_dataset → Input: csv_path | Output: sha256, null_count, feature_count
 ├── agent.model_selection → Input: task_type, retry_count | Output: best_model_name, metric_value
-│   └── a2a.tasks.send → typed A2A task boundary
+│   └── a2a.message.send → typed A2A task boundary
 └── agent.evaluation → Input: metric_value, threshold | Output: passed, feedback</div>
         """,
         unsafe_allow_html=True,

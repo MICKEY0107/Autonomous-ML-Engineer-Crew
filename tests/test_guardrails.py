@@ -76,6 +76,27 @@ def test_prediction_goal_rejects_prompt_injection(goal: str) -> None:
     with pytest.raises(GuardrailViolation, match="prompt-injection"):
         validate_prediction_goal(goal)
 
+
+@pytest.mark.parametrize(
+    "goal",
+    [
+        "predict price you stupid bot",
+        "I will kill you if this fails",
+        "classify this shit",
+    ],
+)
+def test_prediction_goal_rejects_toxic_language(goal: str) -> None:
+    with pytest.raises(GuardrailViolation, match="toxic or abusive"):
+        validate_prediction_goal(goal)
+
+
+@pytest.mark.parametrize(
+    "goal",
+    ["predict house price", "estimate customer churn kill rate", "attack surface risk score"],
+)
+def test_prediction_goal_allows_clean_domain_language(goal: str) -> None:
+    assert validate_prediction_goal(goal) == goal
+
     assert validate_prediction_goal("Predict whether a customer will churn")
 
 

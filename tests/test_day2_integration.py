@@ -19,6 +19,7 @@ from pydantic import BaseModel, ValidationError
 from agents.data_prep import run_data_prep
 from agents.evaluation import run_evaluation
 from agents.model_selection_adk import ModelSelectionRequest
+from orchestrator.a2a_client import send_model_selection_task
 from contracts.models import (
     DataPrepResult,
     DeploymentResult,
@@ -261,13 +262,15 @@ def test_adk_agent_a2a() -> None:
                 pytest.fail("ADK A2A server did not start within 48 seconds")
             time.sleep(0.5)
 
-        response = httpx.post(
-            "http://localhost:8080/a2a/tasks/send",
-            json=request.model_dump(mode="json"),
-            timeout=120.0,
+        # Real A2A protocol: Agent Card discovery + SendMessage JSON-RPC.
+        result, call_info = send_model_selection_task(
+            "http://localhost:8080",
+            request.model_dump(mode="json"),
+            timeout_seconds=120.0,
         )
-        response.raise_for_status()
-        result = ModelSelectionResult.model_validate(response.json())
+        assert isinstance(result, ModelSelectionResult)
+        assert call_info.agent_name == "model_selection_agent"
+        assert call_info.task_state == "TASK_STATE_COMPLETED"
 
         assert isinstance(result.best_model_name, str)
         assert result.best_model_name

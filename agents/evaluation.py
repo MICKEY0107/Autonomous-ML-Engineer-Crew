@@ -35,7 +35,10 @@ from contracts.models import (
     ModelSelectionResult,
     TaskType,
 )
+from opentelemetry.trace import SpanKind
+
 from orchestrator.llm_reasoning import generate_evaluation_reasoning
+from orchestrator.telemetry import traced_span, update_span_io
 
 
 DEFAULT_EVALUATION_ARTIFACT_DIR = Path("/tmp/artifacts/evaluation-cache")
@@ -286,6 +289,108 @@ def _evaluation_gate(
     )
 
 
+class EvaluationReflection(BaseModel):
+    """Structured output of the CrewAI evaluation agent (reflection step)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    diagnosis: str = Field(min_length=1, max_length=1_500)
+    retry_feedback: str | None = Field(default=None, max_length=1_200)
+    reasoning: str = Field(min_length=1, max_length=2_000)
+
+
+def reflect_on_evaluation(
+    *,
+    task_type: TaskType,
+    primary_metric: str,
+    metrics: dict[str, float],
+    threshold: float,
+    passed: bool,
+    gate_feedback: str | None,
+    model_name: str,
+) -> tuple[str, str | None, str]:
+    """Reflection pattern: a CrewAI agent critiques the held-out result.
+
+    The pass/fail gate is already decided deterministically. The agent explains
+    the result and, on failure, writes concrete guidance that is sent back to
+    the ADK model-selection agent for the next attempt.
+
+    Returns (reasoning, retry_feedback, source).
+    """
+
+    safe_input = {
+        "task_type": str(task_type),
+        "model_name": model_name,
+        "primary_metric": primary_metric,
+        "held_out_metrics": metrics,
+        "acceptance_threshold": threshold,
+        "passed": passed,
+    }
+    with traced_span(
+        "llm.decision.evaluation_reflection",
+        kind=SpanKind.CLIENT,
+        attributes={"ml.reasoning.row_safe": True},
+    ) as span:
+        update_span_io(span, input=safe_input)
+        try:
+            import os
+
+            if os.getenv("LLM_MODE", "live").strip().casefold() != "live":
+                raise RuntimeError("LLM_MODE is not live")
+            from orchestrator.crew_agents import run_crew_decision
+
+            def check(reflection: EvaluationReflection) -> None:
+                if not passed and not (reflection.retry_feedback or "").strip():
+                    raise ValueError("the model failed the gate: retry_feedback is required")
+
+            reflection, source = run_crew_decision(
+                stage="evaluation_reflection",
+                role="Model Evaluation Engineer",
+                goal=(
+                    "Judge whether the selected model generalises and, if it failed "
+                    "the acceptance gate, tell the model-selection agent exactly what "
+                    "to change on the next attempt."
+                ),
+                backstory=(
+                    "You are a rigorous ML reviewer. You never change metric values "
+                    "or the pass/fail decision; you interpret them and give "
+                    "actionable, bounded advice (hyperparameters, regularisation, "
+                    "class weighting, model family)."
+                ),
+                task_description=(
+                    "Reflect on this held-out evaluation and return JSON with "
+                    "diagnosis, retry_feedback (required if passed is false, else "
+                    "null) and reasoning (3 short bullet points). Evidence: "
+                    f"{safe_input}"
+                ),
+                expected_output="An EvaluationReflection JSON object.",
+                output_model=EvaluationReflection,
+                validator=check,
+            )
+            feedback = None
+            if not passed:
+                feedback = f"{gate_feedback} Evaluator guidance: {reflection.retry_feedback}"
+            reasoning = f"{reflection.diagnosis}\n{reflection.reasoning}"
+            update_span_io(
+                span,
+                output={**reflection.model_dump(), "source": source, "fallback_used": False},
+            )
+            return reasoning, feedback, source
+        except Exception as exc:
+            reasoning = generate_evaluation_reasoning(metrics, passed, threshold, gate_feedback)
+            update_span_io(
+                span,
+                output={
+                    "reasoning": reasoning,
+                    "retry_feedback": gate_feedback,
+                    "source": "fallback",
+                    "fallback_used": True,
+                    "error_type": type(exc).__name__,
+                },
+            )
+            return reasoning, gate_feedback, "fallback"
+
+
 def evaluate_model(
     model_selection_result: ModelSelectionResult | dict[str, Any] | str,
     *,
@@ -351,11 +456,14 @@ def evaluate_model(
         metrics,
         input_payload.acceptance_threshold,
     )
-    llm_reasoning = generate_evaluation_reasoning(
-        metrics,
-        passed,
-        threshold,
-        retry_feedback,
+    llm_reasoning, retry_feedback, _source = reflect_on_evaluation(
+        task_type=metadata.task_type,
+        primary_metric=primary_metric,
+        metrics=metrics,
+        threshold=threshold,
+        passed=passed,
+        gate_feedback=retry_feedback,
+        model_name=selection.best_model_name,
     )
     return EvaluationResult(
         run_id=selection.run_id,

@@ -22,6 +22,8 @@ export interface FinalResult {
   threshold: number | null;
   feedback: string | null;
   token_count: number;
+  estimated_cost_usd?: number;
+  usage_report?: UsageReport;
   runtime_ms: number;
   trace_url: string;
   mlflow_run_id: string | null;
@@ -30,6 +32,24 @@ export interface FinalResult {
   error: string | null;
   completed_at: string;
   llm_summary: string;
+}
+
+export interface UsageAgentBucket {
+  total_tokens: number;
+  requests: number;
+  estimated_cost_usd: number;
+  latency_seconds: number;
+}
+
+export interface UsageReport {
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  llm_requests?: number;
+  llm_latency_seconds?: number;
+  estimated_cost_usd?: number;
+  pricing?: { input_per_1m_usd: number; output_per_1m_usd: number };
+  by_agent?: Record<string, UsageAgentBucket>;
 }
 
 export interface LlmInsights {

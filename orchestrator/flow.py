@@ -21,7 +21,6 @@ from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 from uuid import UUID, uuid4
 
-import httpx
 from crewai.flow.flow import Flow, listen, router, start
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from opentelemetry.trace import SpanKind
@@ -29,6 +28,8 @@ from opentelemetry.trace import SpanKind
 from agents.data_prep import run_data_prep
 from agents.evaluation import evaluate_model
 from agents.model_selection_adk import ModelSelectionRequest
+from orchestrator import usage
+from orchestrator.a2a_client import agent_base_url, send_model_selection_task
 from contracts.models import (
     DataPrepResult,
     EvaluationResult,
@@ -53,7 +54,11 @@ from orchestrator.llm_reasoning import generate_pipeline_summary
 
 logger = logging.getLogger(__name__)
 MAX_EVALUATION_RETRIES = 2
-DEFAULT_A2A_URL = os.environ["A2A_TASKS_URL"]
+# Base URL of the ADK agent; its Agent Card is discovered at
+# ``/.well-known/agent-card.json``. A2A_TASKS_URL is still read for older .env files.
+DEFAULT_A2A_URL = agent_base_url(
+    os.getenv("A2A_AGENT_URL") or os.environ["A2A_TASKS_URL"]
+)
 DEFAULT_ARTIFACT_DIR = Path("/tmp/artifacts")
 
 
@@ -160,6 +165,7 @@ class AutonomousMLEngineerFlow(Flow[PipelineState]):
         """Run the complete Flow under a root trace keyed by ``run_id``."""
 
         self.state.trace_id = self.state.run_id.hex
+        usage.reset()  # fresh token/cost ledger for this pipeline run
         started = time.perf_counter()
         with pipeline_trace(
             self.state.run_id,
@@ -358,11 +364,11 @@ class AutonomousMLEngineerFlow(Flow[PipelineState]):
         request = self._model_request(retry_feedback)
         headers: dict[str, str] = {}
         with traced_span(
-            "a2a.tasks.send",
+            "a2a.message.send",
             kind=SpanKind.CLIENT,
             attributes={
                 "rpc.system": "a2a",
-                "rpc.method": "tasks.send",
+                "rpc.method": "SendMessage",
                 "server.address": self.a2a_url,
                 "ml.run_id": self.state.run_id,
                 "ml.task_type": self.state.task_type,
@@ -377,15 +383,23 @@ class AutonomousMLEngineerFlow(Flow[PipelineState]):
                 },
             )
             inject_trace_headers(headers)
-            response = httpx.post(
+            # Real A2A: discover the ADK Agent Card, then SendMessage (JSON-RPC).
+            result, call_info = send_model_selection_task(
                 self.a2a_url,
-                json=request.model_dump(mode="json"),
+                request.model_dump(mode="json"),
                 headers=headers,
-                timeout=self.request_timeout_seconds,
+                timeout_seconds=self.request_timeout_seconds,
             )
-            set_current_span_attributes({"http.response.status_code": response.status_code})
-            response.raise_for_status()
-            result = ModelSelectionResult.model_validate(response.json())
+            usage.extend(result.llm_usage)  # ADK agent's LLM calls, returned over A2A
+            set_current_span_attributes(
+                {
+                    "a2a.agent.name": call_info.agent_name,
+                    "a2a.agent.url": call_info.agent_url,
+                    "a2a.protocol_version": call_info.protocol_version,
+                    "a2a.task.id": call_info.task_id,
+                    "a2a.task.state": call_info.task_state,
+                }
+            )
             _, metric_value = _selection_metric(result, self.state.task_type)
             update_span_io(
                 span,

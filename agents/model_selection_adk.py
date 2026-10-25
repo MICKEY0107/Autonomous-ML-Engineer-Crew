@@ -58,8 +58,6 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from starlette.requests import Request
-from starlette.responses import JSONResponse
 
 from contracts.models import DataPrepResult, ModelSelectionResult, TaskType
 from tools.log_experiment import (
@@ -666,10 +664,13 @@ def select_models(
         except ValueError as exc:
             raise ModelSelectionError("invalid model-selection request") from exc
 
+    from orchestrator import usage
+
+    usage.drain()  # this A2A task's LLM calls are reported back to the caller
     outcomes, features, target, search_reasoning = _train_candidates(
         validated_request
     )
-    return _run_coroutine(
+    result = _run_coroutine(
         log_and_query_experiment(
             validated_request,
             outcomes,
@@ -678,6 +679,9 @@ def select_models(
             Path(artifact_dir),
             search_reasoning,
         )
+    )
+    return result.model_copy(
+        update={"llm_usage": [entry.model_dump() for entry in usage.drain()]}
     )
 
 
@@ -728,36 +732,36 @@ root_agent = ModelSelectionAgent(
     ),
 )
 
-# ``to_a2a`` supplies the A2A agent card, task store, executor, and JSON-RPC
-# routes. Uvicorn binds this ASGI application in ``main`` below.
+# ``to_a2a`` supplies the A2A Agent Card (/.well-known/agent-card.json), task
+# store, A2aAgentExecutor, and the JSON-RPC SendMessage route. The CrewAI Flow
+# talks to this app only through that standard protocol.
 app = to_a2a(root_agent, host=A2A_HOST, port=A2A_PORT)
 
 
-async def _send_compatibility_task(request: Request) -> JSONResponse:
-    """Accept the Day 2 task endpoint while retaining native A2A JSON-RPC."""
+class TraceContextMiddleware:
+    """Continue the caller's OpenTelemetry trace on every A2A request.
 
-    with extracted_trace_context(dict(request.headers)):
-        try:
-            payload = await request.json()
-            task_payload = (
-                payload.get("task", payload) if isinstance(payload, dict) else payload
-            )
-            validated_request = ModelSelectionRequest.model_validate(task_payload)
-            result = await asyncio.to_thread(select_models, validated_request)
-        except (json.JSONDecodeError, ValueError, TypeError) as exc:
-            return JSONResponse(
-                {"error": "invalid model-selection task", "detail": str(exc)},
-                status_code=422,
-            )
-        return JSONResponse(result.model_dump(mode="json"))
+    The CrewAI Flow injects a W3C ``traceparent`` header into the A2A HTTP
+    request; this pure-ASGI middleware attaches it so the ADK agent's spans
+    (model search, MCP experiment logging) join the same Langfuse trace.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        carrier = {
+            key.decode("latin-1"): value.decode("latin-1")
+            for key, value in scope.get("headers", [])
+        }
+        with extracted_trace_context(carrier):
+            await self.app(scope, receive, send)
 
 
-app.add_route(
-    "/a2a/tasks/send",
-    _send_compatibility_task,
-    methods=["POST"],
-    name="day2-task-send",
-)
+app.add_middleware(TraceContextMiddleware)
 
 
 def main() -> None:

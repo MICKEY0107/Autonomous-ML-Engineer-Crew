@@ -161,7 +161,7 @@ LANGFUSE_SECRET_KEY=sk-lf-your-key
 LANGFUSE_BASE_URL=https://cloud.langfuse.com
 LANGFUSE_PROJECT_ID=your-project-id
 
-A2A_TASKS_URL=http://localhost:8080/a2a/tasks/send
+A2A_AGENT_URL=http://localhost:8080
 A2A_BIND_HOST=127.0.0.1
 A2A_BIND_PORT=8080
 MLFLOW_UI_URL=http://127.0.0.1:5001
@@ -380,7 +380,7 @@ pipeline.run
 ├── agent.data_prep
 │   └── mcp.profile_dataset
 ├── agent.model_selection
-│   ├── a2a.tasks.send
+│   ├── a2a.message.send
 │   └── mcp.log_and_query_experiment
 └── agent.evaluation
 ```

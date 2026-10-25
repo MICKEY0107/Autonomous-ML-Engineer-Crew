@@ -53,7 +53,7 @@ STAGE_NAMES = (
     "Data-Prep Agent",
     "MCP: profile_dataset",
     "Model-Selection Agent",
-    "A2A: tasks.send",
+    "A2A: message/send",
     "MCP: log_experiment",
     "Evaluation Agent",
     "Retry Controller",
@@ -64,7 +64,7 @@ SPAN_STAGE_NAMES = {
     "agent.data_prep": "Data-Prep Agent",
     "mcp.profile_dataset": "MCP: profile_dataset",
     "agent.model_selection": "Model-Selection Agent",
-    "a2a.tasks.send": "A2A: tasks.send",
+    "a2a.message.send": "A2A: message/send",
     "mcp.log_and_query_experiment": "MCP: log_experiment",
     "agent.evaluation": "Evaluation Agent",
     "pipeline.run": "Terminal Result",
@@ -265,7 +265,7 @@ def _callbacks() -> FlowCallbacks:
             if event.stage == "data_prep":
                 _set_stage("MCP: profile_dataset", "running", detail="Profiling dataset")
             elif event.stage == "model_selection":
-                _set_stage("A2A: tasks.send", "running", detail="Dispatching ADK task")
+                _set_stage("A2A: message/send", "running", detail="Dispatching ADK task")
                 _set_stage("MCP: log_experiment", "running", detail="Tracking candidate runs")
 
     def on_complete(event: FlowCallbackEvent) -> None:
@@ -275,7 +275,7 @@ def _callbacks() -> FlowCallbacks:
         if event.stage == "data_prep":
             _set_stage("MCP: profile_dataset", "success", detail="Schema and quality profile captured")
         elif event.stage == "model_selection":
-            _set_stage("A2A: tasks.send", "success", detail="Validated ADK response")
+            _set_stage("A2A: message/send", "success", detail="Validated ADK response")
             _set_stage("MCP: log_experiment", "success", detail="MLflow experiment recorded")
         elif event.stage == "evaluation" and event.retry_count:
             _set_stage("Retry Controller", "success", detail=f"Retry {event.retry_count}/2 completed")
@@ -521,8 +521,8 @@ def _apply_state_reasoning(state: PipelineState, final_result: dict[str, Any]) -
         primary_metric = model_reasoning.get("primary_metric")
         training_metric = selection.training_metrics.get(str(primary_metric))
         _set_stage(
-            "A2A: tasks.send",
-            _stage("A2A: tasks.send")["status"],
+            "A2A: message/send",
+            _stage("A2A: message/send")["status"],
             reasoning={
                 "task_type": str(state.task_type),
                 "retry_count": state.retry_count,
@@ -622,7 +622,7 @@ def _trace_tree(state: PipelineState) -> dict[str, Any]:
     root["children"] = []
     for agent_name, child_name in (
         ("agent.data_prep", "mcp.profile_dataset"),
-        ("agent.model_selection", "a2a.tasks.send"),
+        ("agent.model_selection", "a2a.message.send"),
         ("agent.evaluation", ""),
     ):
         agents = observations(agent_name)
@@ -646,7 +646,7 @@ def _trace_tree(state: PipelineState) -> dict[str, Any]:
                             "row_count": prep.row_count,
                         },
                     }
-                elif child_name == "a2a.tasks.send" and selection is not None:
+                elif child_name == "a2a.message.send" and selection is not None:
                     child = {
                         "name": child_name,
                         "status": "success",
@@ -766,6 +766,8 @@ def _run_job(
             "threshold": threshold,
             "feedback": state.evaluation_result.feedback if state.evaluation_result else None,
             "token_count": result.input_tokens + result.output_tokens,
+            "estimated_cost_usd": result.estimated_cost_usd,
+            "usage_report": result.usage_report,
             "runtime_ms": int(runtime_seconds * 1_000),
             "trace_url": langfuse_trace_url(state.run_id),
             "mlflow_run_id": selection.best_run_id if selection else None,
@@ -847,6 +849,8 @@ def _run_job(
                 "threshold": None,
                 "feedback": message,
                 "token_count": 0,
+                "estimated_cost_usd": 0.0,
+                "usage_report": {},
                 "runtime_ms": runtime_ms,
                 "trace_url": langfuse_trace_url(UUID(run_id)),
                 "mlflow_run_id": None,

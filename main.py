@@ -48,6 +48,7 @@ from orchestrator.telemetry import (
     get_tracer_provider,
     langfuse_trace_url,
 )
+from orchestrator import usage
 from orchestrator.llm_reasoning import generate_pipeline_summary
 
 
@@ -79,6 +80,50 @@ PROMPT_INJECTION_PATTERNS = (
     re.compile(r"<\|\s*(?:assistant|developer|system|user)\s*\|>", re.IGNORECASE),
     re.compile(r"\b(?:show|reveal|print|leak)\b.{0,50}\bsystem prompt\b", re.IGNORECASE),
 )
+# Toxic / abusive-language guardrail (requirement 8). Word-boundary matching on
+# the normalised goal, so ML phrases such as "kill rate" or "attack surface"
+# are not blocked; only profanity, abuse and threats aimed at people.
+TOXIC_TERMS = frozenset(
+    {
+        "asshole",
+        "bastard",
+        "bitch",
+        "bullshit",
+        "dickhead",
+        "fuck",
+        "fucking",
+        "motherfucker",
+        "retard",
+        "shit",
+        "slut",
+        "whore",
+    }
+)
+TOXIC_PATTERNS = (
+    re.compile(
+        r"\b(?:kill|hurt|murder|rape|shoot|stab|attack)\s+"
+        r"(?:you|him|her|them|people|everyone|myself|yourself)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\b(?:i|we)\s+(?:hate|despise)\s+(?:you|all|them|those)\b", re.IGNORECASE),
+    re.compile(r"\b(?:go\s+die|kys)\b", re.IGNORECASE),
+    re.compile(r"\b(?:stupid|dumb|useless)\s+(?:bot|ai|idiot|moron)\b", re.IGNORECASE),
+)
+_TOXIC_WORD = re.compile(r"[a-z]+")
+
+
+def find_toxic_language(text: str) -> list[str]:
+    """Return the toxicity categories found in ``text`` (empty when clean)."""
+
+    normalized = " ".join(str(text).casefold().split())
+    found: list[str] = []
+    if any(word in TOXIC_TERMS for word in _TOXIC_WORD.findall(normalized)):
+        found.append("profanity_or_abuse")
+    if any(pattern.search(normalized) for pattern in TOXIC_PATTERNS):
+        found.append("threat_or_harassment")
+    return found
+
+
 _FORBIDDEN_ROW_KEYS = frozenset(
     {
         "dataframe",
@@ -133,6 +178,12 @@ def validate_prediction_goal(prediction_goal: str) -> str:
     ):
         raise GuardrailViolation(
             "prediction_goal contains prompt-injection-like instructions"
+        )
+    toxic = find_toxic_language(goal)
+    if toxic:
+        raise GuardrailViolation(
+            "prediction_goal contains toxic or abusive language "
+            f"({', '.join(toxic)})"
         )
     return goal
 
@@ -340,10 +391,24 @@ class _ProgressExporter(SpanExporter):
                     span_output,
                     str(attributes.get("ml.metric_name", "metric")),
                 )
-            elif span.name.startswith("llm.reasoning.") and span_output.get("reasoning"):
-                label = span.name.removeprefix("llm.reasoning.").replace("_", " ").title()
+            elif span.name.startswith(("llm.reasoning.", "llm.decision.")) and span_output.get(
+                "reasoning"
+            ):
+                label = (
+                    span.name.removeprefix("llm.reasoning.")
+                    .removeprefix("llm.decision.")
+                    .replace("_", " ")
+                    .title()
+                )
+                # Show where the text really came from, not a fixed provider name.
+                if span_output.get("fallback_used"):
+                    tag = "[FALLBACK]"
+                elif span_output.get("source") == "secondary_llm":
+                    tag = "[LLM-2ND]"
+                else:
+                    tag = f"[{os.getenv('LLM_PROVIDER', 'llm').upper()}]"
                 print(
-                    f"[GEMINI]     {label}\n{span_output['reasoning']}",
+                    f"{tag:<12} {label}\n{span_output['reasoning']}",
                     flush=True,
                 )
         return SpanExportResult.SUCCESS
@@ -403,7 +468,9 @@ class _A2AServer:
 
 def _a2a_port_is_open() -> bool:
     try:
-        with socket.create_connection(("127.0.0.1", 8080), timeout=0.5):
+        with socket.create_connection(
+            ("127.0.0.1", int(os.environ["A2A_BIND_PORT"])), timeout=0.5
+        ):
             return True
     except OSError:
         return False
@@ -484,6 +551,7 @@ def _pipeline_result(
         state.retry_count,
         runtime_seconds,
     )
+    usage_report = usage.summary()
     return PipelineResult(
         run_id=state.run_id,
         status="evaluation_completed" if succeeded else "failed",
@@ -498,6 +566,10 @@ def _pipeline_result(
         runtime_seconds=runtime_seconds,
         error=error,
         llm_summary=summary,
+        input_tokens=usage_report["input_tokens"],
+        output_tokens=usage_report["output_tokens"],
+        estimated_cost_usd=usage_report["estimated_cost_usd"],
+        usage_report=usage_report,
     )
 
 

@@ -48,13 +48,39 @@ def _call_reasoner(
             )
             return fallback
         try:
+            import time
+
+            from orchestrator import usage
+
+            source = "llm"
+            started = time.perf_counter()
             try:
-                response = crewai_llm().call(prompt)
+                llm = crewai_llm()
+                response = llm.call(prompt)
             except Exception:
                 alternate = fallback_crewai_llm()
                 if alternate is None:
                     raise
+                llm, source = alternate, "secondary_llm"
+                started = time.perf_counter()
                 response = alternate.call(prompt)
+            try:
+                metrics = llm.get_token_usage_summary()
+                usage.record(
+                    stage=span_name.removeprefix("llm.reasoning."),
+                    agent="Orchestrator (CrewAI Flow)",
+                    framework="crewai",
+                    provider=str(getattr(llm, "provider", "") or provider),
+                    model=str(getattr(llm, "model", "") or model),
+                    prompt_tokens=metrics.prompt_tokens,
+                    completion_tokens=metrics.completion_tokens,
+                    total_tokens=metrics.total_tokens,
+                    requests=metrics.successful_requests,
+                    latency_seconds=round(time.perf_counter() - started, 3),
+                    source=source,
+                )
+            except Exception:
+                pass  # usage accounting must never break reasoning
             rendered = str(response).strip()
             if not rendered:
                 raise ValueError("LLM returned an empty response")

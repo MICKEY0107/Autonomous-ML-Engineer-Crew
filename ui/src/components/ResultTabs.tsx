@@ -201,9 +201,30 @@ function PipelineResultPanel({ result }: { result: FinalResult | null }) {
           {result.error ?? result.feedback}
         </div>
       )}
+      {result.usage_report?.by_agent && Object.keys(result.usage_report.by_agent).length > 0 && (
+        <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-[11px] text-slate-400">
+          <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">LLM usage &amp; cost by agent</h4>
+          <table className="w-full text-left">
+            <thead>
+              <tr className="text-slate-500"><th>Agent</th><th>Calls</th><th>Tokens</th><th>Latency</th><th>Cost</th></tr>
+            </thead>
+            <tbody>
+              {Object.entries(result.usage_report.by_agent).map(([agent, bucket]) => (
+                <tr key={agent}>
+                  <td className="pr-2">{agent}</td>
+                  <td>{bucket.requests}</td>
+                  <td>{bucket.total_tokens.toLocaleString()}</td>
+                  <td>{bucket.latency_seconds.toFixed(1)}s</td>
+                  <td>${bucket.estimated_cost_usd.toFixed(5)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {result.llm_summary && (
         <div className="llm-insight">
-          <h4>Gemini run summary</h4>
+          <h4>LLM run summary</h4>
           <p>{result.llm_summary}</p>
         </div>
       )}

@@ -19,7 +19,7 @@ const INITIAL_STAGES = [
   "Data-Prep Agent",
   "MCP: profile_dataset",
   "Model-Selection Agent",
-  "A2A: tasks.send",
+  "A2A: message/send",
   "MCP: log_experiment",
   "Evaluation Agent",
   "Retry Controller",
@@ -199,7 +199,7 @@ export default function Dashboard() {
           <MetricCard value={result?.metric_value == null && !history.length ? "—" : formatMetric(currentMetric)} label="Model Accuracy / R²" trend={percentTrend(metricValues)} color="#10b981" sparkline={safeData(metricValues)} chart="bar" footnote={result?.metric_name ?? "held-out metric"} />
           <MetricCard value={String(pipeline.retry_count)} label="Retry Count" trend={percentTrend(retryValues)} color={pipeline.retry_count ? "#f59e0b" : "#10b981"} sparkline={safeData(retryValues)} chart="bar" footnote="bounded at two" />
           <MetricCard value={`${successRate.toFixed(0)}%`} label="Pipeline Success Rate" trend={null} color="#10b981" sparkline={[]} chart="progress" progress={successRate} />
-          <MetricCard value={lastUpdated} label="Last Updated" trend={null} color="#64748b" sparkline={[]} chart="none" footnote="status heartbeat" />
+          <MetricCard value={result?.estimated_cost_usd != null ? `$${result.estimated_cost_usd.toFixed(5)}` : "—"} label="Est. LLM Cost" trend={null} color="#64748b" sparkline={[]} chart="none" footnote={`${result?.usage_report?.llm_requests ?? 0} LLM calls · updated ${lastUpdated}`} />
         </section>
 
         <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(360px,2fr)]">
