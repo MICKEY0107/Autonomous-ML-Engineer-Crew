@@ -3,6 +3,9 @@ import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Too
 import type { Attempt } from "../../types";
 import { AXIS_PROPS, COLORS, Card, EmptyHint, TOOLTIP_PROPS, fmt, prettyName } from "./shared";
 
+// Fixed by the pipeline (not chosen by the LLM), so not shown as "settings".
+const HIDDEN_PARAMS = new Set(["model_type", "random_state", "retry_attempt"]);
+
 function AttemptCard({ attempt, total }: { attempt: Attempt; total: number }) {
   const metric = attempt.candidates[0]?.primary_metric ?? "metric";
   const rows = attempt.candidates.map((candidate) => ({
@@ -36,7 +39,7 @@ function AttemptCard({ attempt, total }: { attempt: Attempt; total: number }) {
             <BarChart data={rows} margin={{ left: 0, right: 8, top: 20, bottom: 4 }}>
               <CartesianGrid vertical={false} stroke={COLORS.grid} />
               <XAxis dataKey="name" {...AXIS_PROPS} />
-              <YAxis {...AXIS_PROPS} tickFormatter={(v: number) => fmt(v)} width={60} domain={["auto", "auto"]} />
+              <YAxis {...AXIS_PROPS} tickFormatter={(v: number) => fmt(v)} width={60} domain={[0, "auto"]} />
               <Tooltip {...TOOLTIP_PROPS} formatter={(value: number) => [fmt(value), metric]} />
               <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                 {rows.map((row) => (
@@ -67,7 +70,7 @@ function AttemptCard({ attempt, total }: { attempt: Attempt; total: number }) {
                   </td>
                   <td className="py-2 pr-2 font-mono text-[11px] text-slate-400">
                     {Object.keys(candidate.parameters).length
-                      ? Object.entries(candidate.parameters).filter(([key]) => key !== "model_type").map(([key, value]) => `${key}=${value ?? "none"}`).join(", ") || "defaults"
+                      ? Object.entries(candidate.parameters).filter(([key]) => !HIDDEN_PARAMS.has(key)).map(([key, value]) => `${key}=${value ?? "none"}`).join(", ") || "defaults"
                       : "defaults"}
                   </td>
                   <td className="py-2 text-right font-mono text-slate-400">{candidate.training_time_ms} ms</td>

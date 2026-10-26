@@ -25,11 +25,17 @@ function ActualVsPredicted({ perf }: { perf: RegressionPerformance }) {
       <ResponsiveContainer width="100%" height="100%">
         <ScatterChart margin={{ left: 8, right: 16, top: 8, bottom: 16 }}>
           <CartesianGrid stroke={COLORS.grid} />
-          <XAxis type="number" dataKey="actual" name="Actual" domain={[low, high]} tickFormatter={(v: number) => fmt(v)} {...AXIS_PROPS} label={{ value: "Actual", position: "insideBottom", offset: -8, fill: COLORS.axis, fontSize: 11 }} />
-          <YAxis type="number" dataKey="predicted" name="Predicted" domain={[low, high]} tickFormatter={(v: number) => fmt(v)} {...AXIS_PROPS} width={64} />
-          <ReferenceLine segment={[{ x: low, y: low }, { x: high, y: high }]} stroke={COLORS.amber} strokeDasharray="5 5" ifOverflow="extendDomain" />
+          <XAxis type="number" dataKey="actual" name="Actual" domain={[low, high]} tickCount={6} tickFormatter={(v: number) => fmt(v)} {...AXIS_PROPS} label={{ value: "Actual", position: "insideBottom", offset: -8, fill: COLORS.axis, fontSize: 11 }} />
+          <YAxis type="number" dataKey="predicted" name="Predicted" domain={[low, high]} tickCount={6} tickFormatter={(v: number) => fmt(v)} {...AXIS_PROPS} width={64} />
           <Tooltip {...TOOLTIP_PROPS} formatter={(value: number) => fmt(value)} />
           <Scatter data={perf.scatter} fill={COLORS.cyan} fillOpacity={0.6} />
+          <Scatter
+            data={[{ actual: low, predicted: low }, { actual: high, predicted: high }]}
+            line={{ stroke: COLORS.amber, strokeDasharray: "6 4", strokeWidth: 1.5 }}
+            shape={() => <g />}
+            legendType="none"
+            isAnimationActive={false}
+          />
         </ScatterChart>
       </ResponsiveContainer>
     </div>

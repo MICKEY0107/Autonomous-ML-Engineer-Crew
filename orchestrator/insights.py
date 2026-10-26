@@ -37,6 +37,16 @@ def _finite(value: Any, digits: int = 6) -> float | None:
     return round(number, digits) if math.isfinite(number) else None
 
 
+def _short(value: float) -> str:
+    """Human-readable axis label: 1.2M, 460k, 3.5, -12k."""
+
+    magnitude = abs(value)
+    for limit, suffix in ((1e9, "B"), (1e6, "M"), (1e3, "k")):
+        if magnitude >= limit:
+            return f"{value / limit:.3g}{suffix}"
+    return f"{value:.3g}"
+
+
 def _histogram(values: pd.Series, bins: int = 20) -> list[dict[str, Any]]:
     clean = pd.to_numeric(values, errors="coerce").dropna()
     if clean.empty:
@@ -44,7 +54,7 @@ def _histogram(values: pd.Series, bins: int = 20) -> list[dict[str, Any]]:
     counts, edges = np.histogram(clean, bins=min(bins, max(clean.nunique(), 1)))
     return [
         {
-            "bin": f"{edges[i]:.4g}–{edges[i + 1]:.4g}",
+            "bin": f"{_short(edges[i])} – {_short(edges[i + 1])}",
             "start": _finite(edges[i]),
             "end": _finite(edges[i + 1]),
             "count": int(count),
@@ -99,6 +109,26 @@ def dataset_insights(
                 )
         relationships.sort(key=lambda item: abs(item["correlation"] or 0), reverse=True)
 
+    # Classification: how each class differs on the most separating inputs
+    # (average value per class, scaled 0-100 so features share one axis).
+    class_profiles: list[dict[str, Any]] = []
+    class_labels: list[str] = []
+    if task_type == "classification" and not numeric.empty:
+        model_features = set(getattr(data_prep, "feature_columns", None) or numeric.columns)
+        usable = [c for c in numeric.columns if c in model_features] or list(numeric.columns)
+        grouped = numeric[usable].groupby(target.astype(str)).mean()
+        spread = (grouped.max() - grouped.min()) / (numeric[usable].std(ddof=0) + 1e-12)
+        top = list(spread.sort_values(ascending=False).index[:6])
+        class_labels = [str(label) for label in grouped.index]
+        for column in top:
+            low, high = numeric[column].min(), numeric[column].max()
+            row: dict[str, Any] = {"feature": column}
+            for label in class_labels:
+                value = grouped.loc[label, column]
+                row[label] = _finite((value - low) / (high - low) * 100 if high > low else 50, 2)
+                row[f"{label}__raw"] = _finite(value, 4)
+            class_profiles.append(row)
+
     target_summary: dict[str, Any] = {}
     if task_type != "classification":
         numeric_target = pd.to_numeric(target, errors="coerce")
@@ -123,6 +153,8 @@ def dataset_insights(
         "target_distribution": target_distribution,
         "target_summary": target_summary,
         "relationships": relationships[:12],
+        "class_profiles": class_profiles,
+        "class_labels": class_labels,
         "dataset_hash": getattr(data_prep, "dataset_hash", None),
         "quality_findings": list(getattr(data_prep, "quality_findings", []) or []),
         "train_rows": getattr(data_prep, "train_row_count", None),

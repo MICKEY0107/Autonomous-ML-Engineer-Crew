@@ -1133,6 +1133,11 @@ SAMPLES = {
         "target_column": "sale_price",
         "prediction_goal": "predict the sale price of a house",
     },
+    "iris.csv": {
+        "title": "Iris flowers (classification)",
+        "target_column": "Species",
+        "prediction_goal": "classify the iris species from flower measurements",
+    },
     "customer_churn.csv": {
         "title": "Customer churn (classification)",
         "target_column": "churned",

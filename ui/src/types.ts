@@ -129,6 +129,8 @@ export interface DatasetInsights {
   target_distribution: { bin?: string; label?: string; count: number; percent?: number }[];
   target_summary: Record<string, number | null>;
   relationships: { feature: string; correlation: number }[];
+  class_profiles?: Record<string, string | number | null>[];
+  class_labels?: string[];
   dataset_hash: string | null;
   quality_findings: string[];
   train_rows: number | null;

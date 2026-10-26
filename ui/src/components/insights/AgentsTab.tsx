@@ -73,7 +73,7 @@ function A2APanel({ a2a }: { a2a?: A2ALog | null }) {
                 </div>
                 <div className="rounded border border-slate-800 p-2 text-xs text-slate-400">
                   <div className="mb-1 font-semibold text-sky-300">ADK → CrewAI (response)</div>
-                  best: {String(exchange.response.best_model)} · score {fmt(Number(exchange.response.metric_value))}
+                  best: {String(exchange.response.best_model)} · validation score {fmt(Number(exchange.response.metric_value))}
                   <div className="mt-1 break-all font-mono text-[10px] text-slate-500">task {exchange.task_id}</div>
                 </div>
               </div>

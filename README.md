@@ -1,9 +1,10 @@
 # Autonomous ML Engineer Crew
 
-A typed, observable multi-agent pipeline for tabular machine learning. The
-project accepts a CSV and prediction goal, prepares the data, compares three
-candidate models through a Google ADK A2A agent, evaluates the winner on held-out
-data, and either succeeds or retries with feedback.
+Automated machine learning for people who just have a spreadsheet. Give it a
+CSV, pick the column to predict and describe the goal in plain words; a crew of
+AI agents prepares the data, trains and compares models, tests the winner on
+unseen data (retrying with feedback if it is not good enough), deploys it
+behind a prediction API, and explains the result with charts and a model card.
 
 The system combines a CrewAI orchestration flow, Google ADK, MCP tools, MLflow,
 Langfuse/OpenTelemetry, Pydantic v2 contracts, a FastAPI boundary, and a React
@@ -26,9 +27,9 @@ Data-prep agent ──► profile_dataset MCP tool
 ADK model-selection agent over A2A ──► MLflow MCP tool
         │
         ▼
-Held-out evaluation
+Held-out evaluation + reflection (CrewAI)
         │
-        ├── pass ─────────────────────────► SUCCESS
+        ├── pass ─► Deployment agent (/predict API) ─► SUCCESS + insights
         │
         └── fail ─► retry with feedback ──► maximum two retries
                                                │
@@ -53,7 +54,16 @@ Key capabilities:
 - Records LLM tokens, latency and estimated cost per agent for every run.
 - Produces correlated Langfuse/OpenTelemetry spans without logging raw rows.
 - Retries failed evaluations at most twice, for three total attempts.
-- Exposes live progress, contracts, results, and trace structure in a React UI.
+- Explains every run in a results dashboard built for non-experts: plain-language
+  findings, feature importance, data profile (class balance, correlations,
+  missing values, per-class profiles), model comparison per attempt, predicted
+  vs actual / residuals or confusion matrix / per-class scores / ROC.
+- Deploys the accepted model: a prediction form, CSV batch scoring and a
+  `/predict` endpoint (optional `X-API-Key`); `serving/` deploys the same
+  bundle to Google Cloud Run with `DEPLOY_TARGET=cloudrun`.
+- Shows provenance of every decision (primary LLM, local Ollama, cache, default
+  rules), the A2A Agent Card and exchanges, live provider health and saved run
+  history (SQLite), with model-card and JSON downloads.
 - Fails closed on invalid CSVs, prompt-injection-like or toxic goals, malformed
   A2A tasks, and malformed tool responses.
 
@@ -191,18 +201,29 @@ Open <http://127.0.0.1:8000>.
 The same process serves both the dashboard and `/api` endpoints. The ADK A2A
 server is started and stopped automatically for each pipeline execution.
 
+Or double-click `scripts\run_server.bat`, which (re)starts the dashboard on
+<http://127.0.0.1:8765>.
+
 ### 4. Run a pipeline
 
-1. Select **Drop a CSV here or browse**.
-2. Choose the target column.
-3. Enter a prediction goal.
-4. Optionally enable **Retry Loop Demo**.
-5. Select **Run pipeline**.
-6. Watch the nine-stage timeline and inspect the Pipeline, Contracts, and Traces
-   tabs when the run completes.
+1. Pick a sample (house prices, Iris, customer churn) or drop your own CSV.
+2. Choose the column to predict (read from the CSV header).
+3. Describe the goal in plain words.
+4. Optionally enable **Retry-loop demo** (forces a failing quality bar).
+5. Select **Build my model** and watch the live stage timeline.
+6. Explore the tabs: Overview, Data, Models, Performance, Agents & A2A,
+   Predict, Trace & contracts. Download the model card or result JSON.
 
-The included demo dataset is `data/house_prices.csv`, with `sale_price` as its
-target column.
+Bundled datasets: `data/house_prices.csv` (target `sale_price`, regression),
+`data/iris.csv` (target `Species`, 3 classes; its `Id` column is detected as
+leakage and excluded automatically) and `data/customer_churn.csv` (target
+`churned`, two classes; regenerate with `scripts/make_sample_data.py`).
+
+Benchmark repeated runs (p50/p95 runtime, cost, pass rate):
+
+```powershell
+.\.venv\Scripts\python.exe scripts\benchmark.py --runs 3
+```
 
 ## Configuration
 
@@ -404,7 +425,7 @@ evaluation. Terminal states are:
 
 | State | Meaning |
 |---|---|
-| `SUCCESS` | The held-out evaluation passed. |
+| `SUCCESS` | The held-out evaluation passed (and the model was deployed). |
 | `FAILED_INPUT` | Input or guardrail validation failed. |
 | `FAILED_EVAL_EXHAUSTED` | Evaluation still failed after two retries. |
 
@@ -472,7 +493,15 @@ project-scoped Langfuse trace when credentials are configured.
 | `GET` | `/api/health` | Liveness check. |
 | `POST` | `/api/pipeline/run` | Upload a CSV and start a background run. |
 | `GET` | `/api/pipeline/status` | Read live stage and retry state. |
-| `GET` | `/api/pipeline/result` | Read the completed result and trace tree. |
+| `GET` | `/api/pipeline/result` | Completed result, insights, decisions and A2A log. |
+| `GET` | `/api/providers` | LLM provider health (no tokens spent) and cache state. |
+| `POST` | `/api/guardrails/check` | Run the goal guardrails alone (`prediction_goal` form field). |
+| `GET` | `/api/runs` · `/api/runs/{run_id}` | Saved run history (SQLite). |
+| `GET` | `/api/runs/{run_id}/download/{model-card.md,result.json,insights.json}` | Downloads. |
+| `GET` | `/api/samples` · `/api/samples/{name}` | Bundled sample datasets. |
+| `GET` | `/api/deployments/{run}` · `/health` | Deployed model schema and health. |
+| `POST` | `/api/deployments/{run}/predict` | `{"rows": [...]}` → predictions (+ class probabilities). |
+| `POST` | `/api/deployments/{run}/predict_csv` | Upload a CSV, get it back with predictions. |
 | `GET` | `/docs` | FastAPI interactive API documentation. |
 
 The run endpoint expects multipart fields named `csv_file`, `target_column`,

@@ -1,5 +1,7 @@
 import { AlertTriangle, Fingerprint } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+
+const CLASS_COLORS = ["#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#fb7185", "#60a5fa"];
 import type { DatasetInsights } from "../../types";
 import { AXIS_PROPS, COLORS, Card, EmptyHint, Stat, TOOLTIP_PROPS, fmt, pct } from "./shared";
 
@@ -39,6 +41,28 @@ export default function DataTab({ data }: { data?: DatasetInsights }) {
           )}
         </Card>
 
+        {isClass && (data.class_profiles?.length ?? 0) > 0 && !data.relationships.length ? (
+          <Card title="How the classes differ" subtitle="Average of each input per class (scaled 0–100 within the input's range)">
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data.class_profiles} margin={{ left: 0, right: 8, top: 4, bottom: 4 }}>
+                  <CartesianGrid vertical={false} stroke={COLORS.grid} />
+                  <XAxis dataKey="feature" {...AXIS_PROPS} />
+                  <YAxis domain={[0, 100]} {...AXIS_PROPS} />
+                  <Tooltip
+                    {...TOOLTIP_PROPS}
+                    formatter={(value: number, name: string, item) => [`${fmt(item.payload[`${name}__raw`])} (${value.toFixed(0)}/100)`, name]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12, color: COLORS.axis }} />
+                  {(data.class_labels ?? []).map((label, index) => (
+                    <Bar key={label} dataKey={label} fill={CLASS_COLORS[index % CLASS_COLORS.length]} radius={[3, 3, 0, 0]} />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">Inputs where the bars differ most are the ones that separate the classes.</p>
+          </Card>
+        ) : (
         <Card title="Strongest relationships with the target" subtitle="Correlation of numeric inputs (−1 to +1)">
           {data.relationships.length ? (
             <div style={{ height: Math.max(200, data.relationships.length * 30) }}>
@@ -61,6 +85,7 @@ export default function DataTab({ data }: { data?: DatasetInsights }) {
             <EmptyHint>Correlations need numeric inputs and a numeric or two-class target.</EmptyHint>
           )}
         </Card>
+        )}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">

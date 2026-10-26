@@ -318,13 +318,25 @@ def reflect_on_evaluation(
     Returns (reasoning, retry_feedback, source).
     """
 
+    lower_is_better = primary_metric in {"rmse", "mae", "mse"}
+    observed = metrics.get(primary_metric)
+    verdict = (
+        f"PASSED: held-out {primary_metric} {observed:.6g} is "
+        f"{'at or below the maximum' if lower_is_better else 'at or above the minimum'} "
+        f"allowed {threshold:.6g}"
+        if passed
+        else f"FAILED: held-out {primary_metric} {observed:.6g} is "
+        f"{'above the maximum' if lower_is_better else 'below the minimum'} allowed {threshold:.6g}"
+    ) if observed is not None else ("PASSED" if passed else "FAILED")
     safe_input = {
         "task_type": str(task_type),
         "model_name": model_name,
         "primary_metric": primary_metric,
+        "metric_direction": "lower is better" if lower_is_better else "higher is better",
         "held_out_metrics": metrics,
         "acceptance_threshold": threshold,
         "passed": passed,
+        "verdict": verdict,
     }
     with traced_span(
         "llm.decision.evaluation_reflection",
@@ -375,7 +387,8 @@ def reflect_on_evaluation(
                         "class weighting, model family)."
                     ),
                     task_description=(
-                        "Reflect on this held-out evaluation and return JSON with "
+                        "The pass/fail verdict below is already decided and correct; do not "
+                        "contradict it. Reflect on this held-out evaluation and return JSON with "
                         "diagnosis, retry_feedback (required if passed is false, else "
                         "null) and reasoning (3 short bullet points). Evidence: "
                         f"{safe_input}"
