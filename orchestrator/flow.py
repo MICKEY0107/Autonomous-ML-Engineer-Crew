@@ -30,8 +30,10 @@ from agents.evaluation import evaluate_model
 from agents.model_selection_adk import ModelSelectionRequest
 from orchestrator import usage
 from orchestrator.a2a_client import agent_base_url, send_model_selection_task
+from orchestrator.a2a_client import reset_log as a2a_log_reset
 from contracts.models import (
     DataPrepResult,
+    DeploymentResult,
     EvaluationResult,
     ModelSelectionResult,
     PipelineStage,
@@ -177,12 +179,17 @@ class AutonomousMLEngineerFlow(Flow[PipelineState]):
     evaluation_threshold: float | None = None
     request_timeout_seconds: float = Field(default=120.0, gt=0)
     llm_summary: str = ""
+    # One entry per model-selection/evaluation attempt, for the dashboard's
+    # retry timeline (row-free: candidates, metrics, feedback).
+    attempts: list[dict[str, Any]] = Field(default_factory=list)
+    deployment_error: str | None = None
 
     async def kickoff_async(self, *args: Any, **kwargs: Any) -> Any:
         """Run the complete Flow under a root trace keyed by ``run_id``."""
 
         self.state.trace_id = self.state.run_id.hex
         usage.reset()  # fresh token/cost ledger for this pipeline run
+        a2a_log_reset()
         started = time.perf_counter()
         with pipeline_trace(
             self.state.run_id,
@@ -329,6 +336,17 @@ class AutonomousMLEngineerFlow(Flow[PipelineState]):
                     "metric_value": metric_value,
                 },
             )
+        if stage == "deployment" and isinstance(result, DeploymentResult):
+            return (
+                {"model_uri": self.state.model_selection_result.best_model_uri
+                 if self.state.model_selection_result else None},
+                {
+                    "service_url": str(result.service_url),
+                    "health_status": str(result.health_status),
+                    "revision": result.deployment_revision,
+                    "digest": result.image_digest,
+                },
+            )
         if stage == "evaluation" and isinstance(result, EvaluationResult):
             metric_name = result.primary_metric
             metric_value = float(result.held_out_metrics[metric_name])
@@ -358,8 +376,29 @@ class AutonomousMLEngineerFlow(Flow[PipelineState]):
         self.state.status = PipelineStatus.FAILED_EVAL_EXHAUSTED
 
     def _mark_success(self) -> None:
+        self._deploy()
         self.state.current_stage = PipelineStage.COMPLETE
         self.state.status = PipelineStatus.SUCCESS
+
+    def _deploy(self) -> None:
+        """Deployment and Observability Agent: package + serve the accepted model.
+
+        A deployment problem never turns a passing model into a failed run; it
+        is reported in ``deployment_error`` and the result stays evaluation-only.
+        """
+
+        if os.getenv("DEPLOY_ON_SUCCESS", "on").strip().casefold() in {"off", "0", "false", "no"}:
+            return
+        from agents.deployment import deploy_model  # heavy imports only when deploying
+
+        self.state.current_stage = PipelineStage.DEPLOYMENT
+        try:
+            self.state.deployment_result = self._execute_stage(
+                "deployment",
+                lambda: deploy_model(self.state, tracking_uri=self.tracking_uri),
+            )
+        except Exception as exc:
+            self.deployment_error = _safe_error(exc)
 
     def _model_request(self, retry_feedback: str | None = None) -> ModelSelectionRequest:
         if self.state.data_prep_result is None:
@@ -470,10 +509,34 @@ class AutonomousMLEngineerFlow(Flow[PipelineState]):
 
     def _store_selection(self, result: ModelSelectionResult) -> None:
         self.state.model_selection_result = result
+        self.attempts.append(
+            {
+                "attempt": len(self.attempts) + 1,
+                "retry_feedback_in": self.state.evaluation_result.retry_feedback
+                if self.state.evaluation_result is not None and self.attempts
+                else None,
+                "selected_model": result.best_model_name,
+                "candidates": result.candidates,
+                "reasoning": result.llm_reasoning,
+                "evaluation": None,
+            }
+        )
         self.state.artifact_references = {
             **self.state.artifact_references,
             "model": result.best_model_uri,
         }
+
+    def _record_evaluation(self, result: EvaluationResult) -> None:
+        if self.attempts:
+            self.attempts[-1]["evaluation"] = {
+                "passed": result.passed,
+                "primary_metric": result.primary_metric,
+                "held_out_metrics": result.held_out_metrics,
+                "threshold": result.acceptance_threshold,
+                "direction": str(result.metric_direction),
+                "feedback": result.retry_feedback,
+                "reasoning": result.llm_reasoning,
+            }
 
     @start()
     def data_prep_stage(self) -> DataPrepResult | None:
@@ -527,6 +590,7 @@ class AutonomousMLEngineerFlow(Flow[PipelineState]):
             self._mark_failed_evaluation(_safe_error(exc))
             return None
         self.state.evaluation_result = result
+        self._record_evaluation(result)
         return result
 
     @router(evaluation_stage)
@@ -596,6 +660,7 @@ class AutonomousMLEngineerFlow(Flow[PipelineState]):
                 self._mark_failed_evaluation(_safe_error(exc))
                 return self.state
             self.state.evaluation_result = evaluated
+            self._record_evaluation(evaluated)
             if evaluated.passed:
                 self._mark_success()
                 return self.state

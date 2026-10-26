@@ -72,7 +72,12 @@ from orchestrator.telemetry import (
     traced_span,
     update_span_io,
 )
-from orchestrator.agentic_policy import ModelSearchPlan, choose_model, plan_model_search
+from orchestrator.agentic_policy import (
+    ModelSearchPlan,
+    _eligible_model_names,
+    choose_model,
+    plan_model_search,
+)
 
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
@@ -562,6 +567,7 @@ async def log_and_query_experiment(
             }
             for outcome in outcomes
         ]
+        eligible_names = _eligible_model_names(candidates_info, maximize=maximize)
         choice = choose_model(
             candidates=candidates_info,
             task_type=request.task_type.value,
@@ -629,6 +635,20 @@ async def log_and_query_experiment(
         ),
         best_parameters=best_outcome.parameters,
         training_metrics=best_outcome.metrics,
+        candidates=[
+            {
+                "name": outcome.name,
+                "mlflow_run_id": run_id_by_name[outcome.name],
+                "parameters": outcome.parameters,
+                "metrics": outcome.metrics,
+                "primary_metric": primary_metric,
+                "training_time_ms": outcome.training_time_ms,
+                "eligible": outcome.name in eligible_names,
+                "selected": outcome.name == choice.selected_model_name,
+            }
+            for outcome in outcomes
+        ],
+        retry_attempt=request.retry_attempt,
         llm_reasoning=(
             f"Search plan: {search_reasoning}\n\n"
             f"Final model decision: {choice.reasoning}"

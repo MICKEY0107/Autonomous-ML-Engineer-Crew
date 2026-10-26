@@ -1,13 +1,16 @@
 """FastAPI facade for the Autonomous ML Engineer Crew dashboard.
 
-The API intentionally exposes only schemas, metrics, artifact references, and
-sanitized trace metadata. Dataset rows never cross this boundary.
+LLM prompts and traces only ever see schemas, counts and metrics. The results
+page additionally shows charts computed locally from the uploader's own data
+(aggregates and held-out prediction pairs); those never leave this process
+except to the dashboard that uploaded the file.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import secrets
 import threading
 import time
 from copy import deepcopy
@@ -16,14 +19,19 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 
+from agents.deployment import bundle_dir, load_bundle, predict_rows
 from contracts.models import PipelineState, PipelineStatus
+from main import GuardrailViolation, validate_prediction_goal
+from orchestrator import a2a_client, run_store
+from orchestrator.insights import build_run_insights
+from orchestrator.provider_status import provider_status
 from main import _pipeline_result, _start_a2a_server, create_pipeline_state, infer_task_type
 from orchestrator.flow import DEFAULT_A2A_URL, FlowCallbackEvent, FlowCallbacks, build_flow
 from orchestrator.telemetry import (
@@ -57,6 +65,7 @@ STAGE_NAMES = (
     "MCP: log_experiment",
     "Evaluation Agent",
     "Retry Controller",
+    "Deployment Agent",
     "Terminal Result",
 )
 
@@ -67,6 +76,7 @@ SPAN_STAGE_NAMES = {
     "a2a.message.send": "A2A: message/send",
     "mcp.log_and_query_experiment": "MCP: log_experiment",
     "agent.evaluation": "Evaluation Agent",
+    "agent.deployment": "Deployment Agent",
     "pipeline.run": "Terminal Result",
 }
 
@@ -251,6 +261,7 @@ def _callbacks() -> FlowCallbacks:
         "data_prep": "Data-Prep Agent",
         "model_selection": "Model-Selection Agent",
         "evaluation": "Evaluation Agent",
+        "deployment": "Deployment Agent",
     }
 
     def on_start(event: FlowCallbackEvent) -> None:
@@ -688,6 +699,32 @@ def _trace_tree(state: PipelineState) -> dict[str, Any]:
     return root
 
 
+def _persist_run() -> None:
+    """Save the finished run (result, insights, decisions, A2A log) to SQLite."""
+
+    snapshot = _snapshot()
+    if not snapshot.get("final_result"):
+        return
+    try:
+        run_store.save_run(_result_payload(snapshot))
+    except Exception:
+        pass  # history is a convenience; never fail the run over it
+
+
+def _result_payload(snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "final_result": snapshot.get("final_result"),
+        "trace_data": snapshot.get("trace_data"),
+        "llm_insights": snapshot.get("llm_insights"),
+        "insights": snapshot.get("insights"),
+        "a2a": snapshot.get("a2a"),
+        "run_input": snapshot.get("run_input"),
+        "stages_completed": snapshot.get("stages_completed"),
+        "stages": snapshot.get("stages"),
+        "updated_at": snapshot.get("updated_at"),
+    }
+
+
 def _run_job(
     *,
     csv_path: Path,
@@ -777,6 +814,38 @@ def _run_job(
             "completed_at": result.completed_at.isoformat(),
             "llm_summary": result.llm_summary,
         }
+        deployment = state.deployment_result
+        final_result.update(
+            {
+                "prediction_goal": state.prediction_goal,
+                "target_column": state.target_column,
+                "task_type": str(state.task_type),
+                "endpoint": str(deployment.service_url) if deployment else None,
+                "deployment": deployment.model_dump(mode="json") if deployment else None,
+                "deployment_error": flow.deployment_error,
+                "model_card_markdown": result.model_card_markdown,
+            }
+        )
+        if deployment is None and _stage("Deployment Agent")["status"] == "pending":
+            _set_stage(
+                "Deployment Agent",
+                "failed" if flow.deployment_error else "pending",
+                detail=flow.deployment_error or "Deploys only a model that passed evaluation",
+            )
+        try:
+            run_insights = build_run_insights(
+                state=state,
+                attempts=flow.attempts,
+                tracking_uri=f"sqlite:///{UI_MLFLOW_DATABASE.as_posix()}",
+                artifact_dir=artifact_dir,
+                final=final_result,
+            )
+        except Exception as exc:  # charts must never fail a finished run
+            run_insights = {"errors": [type(exc).__name__], "attempts": flow.attempts}
+        a2a_log = {
+            "agent_card": deepcopy(a2a_client.AGENT_CARD),
+            "exchanges": deepcopy(a2a_client.EXCHANGES),
+        }
         llm_insights = {
             "data_prep": state.data_prep_result.llm_reasoning
             if state.data_prep_result
@@ -807,8 +876,11 @@ def _run_job(
             _state["final_result"] = final_result
             _state["trace_data"] = _trace_tree(state)
             _state["llm_insights"] = llm_insights
+            _state["insights"] = run_insights
+            _state["a2a"] = a2a_log
             _state["error"] = final_result["error"]
             _touch()
+        _persist_run()
     except Exception as exc:
         runtime_ms = int((time.perf_counter() - started) * 1_000)
         run_id = str(state.run_id if state is not None else uuid4())
@@ -868,6 +940,7 @@ def _run_job(
             }
             _state["error"] = message
             _touch()
+        _persist_run()
     finally:
         if server is not None:
             server.stop()
@@ -936,6 +1009,14 @@ async def run_pipeline_endpoint(
                 "llm_insights": None,
                 "captured_spans": [],
                 "retry_history": [],
+                "insights": None,
+                "a2a": None,
+                "run_input": {
+                    "dataset_name": filename,
+                    "target_column": target_column,
+                    "prediction_goal": prediction_goal,
+                    "force_fail_eval": force_fail_eval,
+                },
                 "error": None,
                 "run_id": None,
                 "started_at": datetime.now(timezone.utc).isoformat(),
@@ -967,14 +1048,184 @@ def pipeline_result() -> dict[str, Any]:
     snapshot = _snapshot()
     if snapshot["status"] in {"idle", "running"} or snapshot["final_result"] is None:
         raise HTTPException(status_code=404, detail="No completed pipeline result is available")
-    return {
-        "final_result": snapshot["final_result"],
-        "trace_data": snapshot["trace_data"],
-        "llm_insights": snapshot["llm_insights"],
-        "stages_completed": snapshot["stages_completed"],
-        "stages": snapshot["stages"],
-        "updated_at": snapshot["updated_at"],
-    }
+    return _result_payload(snapshot)
+
+
+# ------------------------------------------------------------- providers / guards
+@app.get("/api/providers")
+def providers(refresh: bool = False) -> dict[str, Any]:
+    """Which LLM providers answer right now (no generation quota spent)."""
+
+    return provider_status(force=refresh)
+
+
+@app.post("/api/guardrails/check")
+def guardrail_check(prediction_goal: str = Form(...)) -> dict[str, Any]:
+    """Run the prediction-goal guardrails alone, without starting a pipeline."""
+
+    try:
+        validate_prediction_goal(prediction_goal)
+    except GuardrailViolation as exc:
+        message = str(exc)
+        category = (
+            "toxic_language" if "toxic" in message
+            else "prompt_injection" if "injection" in message
+            else "invalid_goal"
+        )
+        return {"allowed": False, "category": category, "reason": message}
+    return {"allowed": True, "category": None, "reason": "Goal passed all guardrails"}
+
+
+# ------------------------------------------------------------------ run history
+@app.get("/api/runs")
+def runs(limit: int = 50) -> list[dict[str, Any]]:
+    return run_store.list_runs(limit=min(max(limit, 1), 200))
+
+
+@app.get("/api/runs/{run_id}")
+def run_detail(run_id: str) -> dict[str, Any]:
+    payload = run_store.get_run(run_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Unknown run")
+    return payload
+
+
+@app.get("/api/runs/{run_id}/download/{kind}")
+def run_download(run_id: str, kind: str) -> Response:
+    payload = run_store.get_run(run_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Unknown run")
+    short = run_id[:8]
+    if kind == "model-card.md":
+        insights = payload.get("insights") or {}
+        text = insights.get("model_card_markdown") or (payload.get("final_result") or {}).get(
+            "model_card_markdown", ""
+        )
+        return PlainTextResponse(
+            text,
+            media_type="text/markdown",
+            headers={"Content-Disposition": f'attachment; filename="model-card-{short}.md"'},
+        )
+    if kind == "result.json":
+        body = json.dumps(
+            {key: payload.get(key) for key in ("final_result", "llm_insights", "a2a", "run_input")},
+            indent=2,
+            default=str,
+        )
+        return Response(
+            body,
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="pipeline-result-{short}.json"'},
+        )
+    if kind == "insights.json":
+        return Response(
+            json.dumps(payload.get("insights") or {}, indent=2, default=str),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="insights-{short}.json"'},
+        )
+    raise HTTPException(status_code=404, detail="Unknown download")
+
+
+# --------------------------------------------------------------- sample datasets
+SAMPLES = {
+    "house_prices.csv": {
+        "title": "House prices (regression)",
+        "target_column": "sale_price",
+        "prediction_goal": "predict the sale price of a house",
+    },
+    "customer_churn.csv": {
+        "title": "Customer churn (classification)",
+        "target_column": "churned",
+        "prediction_goal": "predict which customers will churn",
+    },
+}
+
+
+@app.get("/api/samples")
+def samples() -> list[dict[str, Any]]:
+    return [
+        {"name": name, **meta}
+        for name, meta in SAMPLES.items()
+        if (PROJECT_ROOT / "data" / name).is_file()
+    ]
+
+
+@app.get("/api/samples/{name}")
+def sample_file(name: str) -> FileResponse:
+    if name not in SAMPLES or not (PROJECT_ROOT / "data" / name).is_file():
+        raise HTTPException(status_code=404, detail="Unknown sample")
+    return FileResponse(PROJECT_ROOT / "data" / name, media_type="text/csv", filename=name)
+
+
+# ------------------------------------------------------------ deployed models
+def _check_api_key(x_api_key: str | None) -> None:
+    expected = os.getenv("PREDICT_API_KEY")
+    if expected and not (x_api_key and secrets.compare_digest(x_api_key, expected)):
+        raise HTTPException(status_code=401, detail="missing or invalid X-API-Key")
+
+
+def _bundle(run_hex: str) -> tuple[Any, dict[str, Any]]:
+    if not run_hex.isalnum() or not (bundle_dir(run_hex) / "metadata.json").is_file():
+        raise HTTPException(status_code=404, detail="No deployed model for this run")
+    return load_bundle(run_hex)
+
+
+@app.get("/api/deployments/{run_hex}")
+def deployment_info(run_hex: str) -> dict[str, Any]:
+    _, metadata = _bundle(run_hex)
+    return {"status": "ok", "auth_required": bool(os.getenv("PREDICT_API_KEY")), **metadata}
+
+
+@app.get("/api/deployments/{run_hex}/health")
+def deployment_health(run_hex: str) -> dict[str, Any]:
+    _, metadata = _bundle(run_hex)
+    return {"status": "ok", "run_id": metadata["run_id"], "model": metadata["model_name"]}
+
+
+@app.post("/api/deployments/{run_hex}/predict")
+def deployment_predict(
+    run_hex: str,
+    body: dict[str, Any],
+    x_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _check_api_key(x_api_key)
+    model, metadata = _bundle(run_hex)
+    rows = body.get("rows")
+    if not isinstance(rows, list) or not rows or len(rows) > 1_000:
+        raise HTTPException(status_code=422, detail="rows must be a list of 1-1000 objects")
+    try:
+        predictions = predict_rows(model, metadata, rows)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"prediction failed: {type(exc).__name__}") from exc
+    return {"target": metadata["target_column"], "predictions": predictions}
+
+
+@app.post("/api/deployments/{run_hex}/predict_csv")
+async def deployment_predict_csv(
+    run_hex: str,
+    csv_file: UploadFile = File(...),
+    x_api_key: str | None = Header(default=None),
+) -> Response:
+    import io
+
+    import pandas as pd
+
+    _check_api_key(x_api_key)
+    model, metadata = _bundle(run_hex)
+    raw = await csv_file.read(MAX_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="CSV must be smaller than 100 MB")
+    try:
+        frame = pd.read_csv(io.BytesIO(raw))
+        predictions = predict_rows(model, metadata, frame.to_dict(orient="records"))
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"prediction failed: {type(exc).__name__}") from exc
+    frame[f"predicted_{metadata['target_column']}"] = [p["prediction"] for p in predictions]
+    return Response(
+        frame.to_csv(index=False),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="predictions-{run_hex[:8]}.csv"'},
+    )
 
 
 @app.get("/", include_in_schema=False)

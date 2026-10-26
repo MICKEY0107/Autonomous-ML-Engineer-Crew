@@ -559,9 +559,24 @@ def _pipeline_result(
         runtime_seconds,
     )
     usage_report = usage.summary()
+    deployment = state.deployment_result
+    deployed = (
+        succeeded
+        and deployment is not None
+        and str(deployment.health_status) == "healthy"
+    )
+    if deployed:
+        lineage.update(
+            {
+                "deployment_revision": deployment.deployment_revision,
+                "deployment_digest": deployment.image_digest,
+            }
+        )
     return PipelineResult(
         run_id=state.run_id,
-        status="evaluation_completed" if succeeded else "failed",
+        status="completed" if deployed else ("evaluation_completed" if succeeded else "failed"),
+        endpoint=deployment.service_url if deployed else None,
+        deployment=deployment if deployed else None,
         model_card_markdown=(
             "# Autonomous ML pipeline result\n\n"
             f"- Terminal state: `{state.status}`\n"
@@ -696,8 +711,47 @@ def main(argv: list[str] | None = None) -> int:
             f"{bucket['total_tokens']} tokens, ${bucket['estimated_cost_usd']:.6f}",
             flush=True,
         )
+    if result.deployment is not None:
+        print(
+            f"[DEPLOY]      {result.deployment.health_status} · {result.endpoint} · "
+            f"{result.deployment.deployment_revision}",
+            flush=True,
+        )
+    elif flow.deployment_error:
+        print(f"[DEPLOY]      skipped — {flow.deployment_error}", flush=True)
     result_path = artifact_dir / "pipeline_result.json"
     result_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
+    try:
+        from orchestrator.insights import build_run_insights
+
+        selection = flow.state.model_selection_result
+        evaluation = flow.state.evaluation_result
+        cli_final = {
+            "run_id": str(result.run_id),
+            "status": str(flow.state.status),
+            "model_name": selection.best_model_name if selection else None,
+            "metric_name": evaluation.primary_metric if evaluation else None,
+            "metric_value": evaluation.held_out_metrics.get(evaluation.primary_metric) if evaluation else None,
+            "threshold": evaluation.acceptance_threshold if evaluation else None,
+            "retry_count": flow.state.retry_count,
+            "runtime_ms": int(result.runtime_seconds * 1000),
+            "estimated_cost_usd": result.estimated_cost_usd,
+            "usage_report": result.usage_report,
+            "trace_url": str(result.trace_url),
+            "prediction_goal": flow.state.prediction_goal,
+        }
+        insights = build_run_insights(
+            state=flow.state,
+            attempts=flow.attempts,
+            tracking_uri=flow.tracking_uri,
+            artifact_dir=artifact_dir,
+            final=cli_final,
+        )
+        (artifact_dir / "model_card.md").write_text(insights["model_card_markdown"], encoding="utf-8")
+        for note in insights.get("findings", []):
+            print(f"[INSIGHT]     {note}", flush=True)
+    except Exception as exc:  # insights are a bonus; the run already succeeded
+        print(f"[INSIGHT]     unavailable ({type(exc).__name__})", flush=True)
     print(f"[RESULT]      {result_path}", flush=True)
     print(f"[TRACE]       {result.trace_url}", flush=True)
     flush_traces()

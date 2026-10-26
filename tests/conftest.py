@@ -18,6 +18,8 @@ os.environ["LLM_CACHE"] = "off"
 # A developer's .env fallback chain (e.g. a local Ollama) must not leak into tests.
 os.environ["LLM_FALLBACK_CHAIN"] = ""
 os.environ["LLM_NARRATIVE_MODEL"] = ""
+# Flow tests use mocked stages; deployment is covered by tests/test_deployment.py.
+os.environ["DEPLOY_ON_SUCCESS"] = "off"
 
 
 @pytest.fixture

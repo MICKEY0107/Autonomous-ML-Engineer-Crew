@@ -1,0 +1,8 @@
+# Minimal image for one deployed model bundle (model.joblib + metadata.json).
+FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+ENV MODEL_DIR=/app PORT=8080
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT}"]

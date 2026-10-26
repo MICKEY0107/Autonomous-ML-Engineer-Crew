@@ -185,6 +185,9 @@ class ModelSelectionResult(ContractModel):
     llm_reasoning: str = ""
     # Token/latency records of the ADK agent's LLM decisions (no row data).
     llm_usage: list[dict[str, Any]] = Field(default_factory=list)
+    # Every trained candidate of this attempt: params, metrics, quality band, pick.
+    candidates: list[dict[str, Any]] = Field(default_factory=list)
+    retry_attempt: int = Field(default=0, ge=0)
 
     @property
     def best_model_name(self) -> str:

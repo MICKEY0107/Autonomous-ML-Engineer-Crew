@@ -395,6 +395,14 @@ def reflect_on_evaluation(
             )
             return reasoning, feedback, source
         except Exception as exc:
+            from orchestrator import usage
+
+            usage.record(
+                stage="evaluation_reflection",
+                agent="Model Evaluation Engineer",
+                framework="crewai",
+                source="fallback",
+            )
             # Deterministic text: every provider already failed, so another
             # LLM call here would only repeat the failure.
             gate = "passed" if passed else "did not pass"

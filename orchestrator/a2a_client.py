@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
@@ -31,6 +32,35 @@ from pydantic import ValidationError
 from contracts.models import ModelSelectionResult
 
 LEGACY_TASK_SUFFIX = "/a2a/tasks/send"
+
+
+# Row-free record of every A2A exchange in the current run (dashboard A2A panel).
+EXCHANGES: list[dict[str, Any]] = []
+AGENT_CARD: dict[str, Any] = {}
+
+
+def reset_log() -> None:
+    EXCHANGES.clear()
+    AGENT_CARD.clear()
+
+
+def _request_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    prep = payload.get("data_prep_result", {}) or {}
+    return {
+        "task_type": payload.get("task_type"),
+        "retry_attempt": payload.get("retry_attempt"),
+        "retry_feedback": payload.get("retry_feedback"),
+        "prediction_goal": payload.get("prediction_goal"),
+        "data_prep_result": {
+            "run_id": prep.get("run_id"),
+            "dataset_hash": prep.get("dataset_hash"),
+            "target_column": prep.get("target_column"),
+            "feature_count": len(prep.get("feature_columns", []) or []),
+            "train_rows": prep.get("train_row_count"),
+            "test_rows": prep.get("test_row_count"),
+            "train_artifact_uri": prep.get("train_artifact_uri"),
+        },
+    }
 
 
 class A2AProtocolError(RuntimeError):
@@ -81,11 +111,20 @@ async def send_model_selection_task_async(
     """Discover the ADK agent card and send one A2A message to it."""
 
     base_url = agent_base_url(base_url)
+    started = time.perf_counter()
     info = A2ACallInfo()
     timeout = httpx.Timeout(timeout_seconds, connect=10.0)
     async with httpx.AsyncClient(headers=headers or {}, timeout=timeout) as http:
         card = await A2ACardResolver(http, base_url).get_agent_card()
         info.agent_name = card.name
+        try:
+            from google.protobuf.json_format import MessageToDict
+
+            AGENT_CARD.clear()
+            AGENT_CARD.update(MessageToDict(card))
+            AGENT_CARD["card_url"] = f"{base_url}/.well-known/agent-card.json"
+        except Exception:
+            pass
         interfaces = list(getattr(card, "supported_interfaces", []) or [])
         if interfaces:
             info.agent_url = interfaces[0].url
@@ -127,7 +166,28 @@ async def send_model_selection_task_async(
         finally:
             await client.close()
 
-    return _parse_result([t for t in texts if t]), info
+    result = _parse_result([t for t in texts if t])
+    EXCHANGES.append(
+        {
+            "attempt": len(EXCHANGES) + 1,
+            "method": "SendMessage (JSON-RPC)",
+            "agent": info.agent_name,
+            "endpoint": info.agent_url or base_url,
+            "protocol_version": info.protocol_version,
+            "task_id": info.task_id,
+            "task_state": info.task_state,
+            "latency_ms": int((time.perf_counter() - started) * 1000),
+            "request": _request_summary(payload),
+            "response": {
+                "best_model": result.best_model_name,
+                "metric_value": result.metric_value,
+                "candidate_count": len(result.candidate_run_ids),
+                "best_run_id": result.best_run_id,
+                "model_uri": result.best_model_uri,
+            },
+        }
+    )
+    return result, info
 
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="a2a-client")

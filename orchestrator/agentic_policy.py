@@ -342,6 +342,14 @@ def plan_data_prep(
             update_span_io(span, output={**plan.model_dump(), "fallback_used": False})
             return plan
         except Exception as exc:
+            from orchestrator import usage
+
+            usage.record(
+                stage="data_prep_plan",
+                agent="Data Preparation Engineer",
+                framework="crewai",
+                source="fallback",
+            )
             update_span_io(
                 span,
                 output={
