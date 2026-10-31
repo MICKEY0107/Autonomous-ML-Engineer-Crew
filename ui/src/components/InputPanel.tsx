@@ -86,6 +86,12 @@ export default function InputPanel({ isRunning, onRun }: InputPanelProps) {
 
   const runBadCsv = async () => {
     const tiny = new File(["a,b\n1,2\n3,4\n5,6\n"], "too_small.csv", { type: "text/csv" });
+    setGuard({
+      allowed: false,
+      category: "bad_file",
+      reason: "A real run was started with this 3-row file; the input guardrail stops it before any agent runs. See the result on the right.",
+      goal: "too_small.csv · 3 rows (minimum is 11)",
+    });
     await onRun({ file: tiny, targetColumn: "b", predictionGoal: "predict b", forceFailEval: false });
   };
 

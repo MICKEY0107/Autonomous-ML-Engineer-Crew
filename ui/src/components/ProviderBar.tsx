@@ -26,7 +26,14 @@ export default function ProviderBar() {
     return () => window.clearInterval(timer);
   }, []);
 
-  if (!state) return null;
+  if (!state) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 px-2 py-0.5 text-[11px] text-slate-500">
+        <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
+        {loading ? "checking AI providers…" : "AI provider status unavailable"}
+      </span>
+    );
+  }
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {state.mode !== "live" && (

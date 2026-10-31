@@ -39,6 +39,7 @@ export interface FinalResult {
   deployment?: DeploymentInfo | null;
   deployment_error?: string | null;
   model_card_markdown?: string;
+  failed_stage?: string | null;
 }
 
 export interface DeploymentInfo {

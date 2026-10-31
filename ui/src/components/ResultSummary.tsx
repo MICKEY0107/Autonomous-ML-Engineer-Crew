@@ -9,6 +9,9 @@ export default function ResultSummary({ payload }: { payload: ResultPayload }) {
   const usage = final.usage_report ?? {};
   const success = final.status === "SUCCESS";
   const inputFailure = final.status === "FAILED_INPUT";
+  // FAILED_INPUT also ends runs whose later stage errored (e.g. an A2A timeout).
+  const guardrailStages = ["Input Validation", "Data-Prep Agent", "MCP: profile_dataset"];
+  const stoppedLater = inputFailure && Boolean(final.failed_stage) && !guardrailStages.includes(final.failed_stage ?? "");
   const headline = payload.insights?.findings?.[1] ?? payload.insights?.findings?.[0];
   return (
     <section className={`rounded-xl border p-4 ${success ? "border-emerald-500/30 bg-emerald-500/[.06]" : "border-rose-500/30 bg-rose-500/[.06]"}`}>
@@ -18,6 +21,7 @@ export default function ResultSummary({ payload }: { payload: ResultPayload }) {
             {success ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
             {success
               ? `${prettyName(final.model_name)} is ready${final.deployment ? " and deployed" : ""}`
+              : stoppedLater ? `Run stopped: ${final.failed_stage} failed`
               : inputFailure ? "Input rejected by guardrails" : "No model met the quality target"}
           </div>
           <p className="mt-1 max-w-3xl text-sm text-slate-300">

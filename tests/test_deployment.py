@@ -119,6 +119,13 @@ def test_api_predict_endpoints_and_api_key(regression_bundle, monkeypatch) -> No
         headers={"X-API-Key": "secret-test-key"},
     )
     assert ok.status_code == 200
+    # A non-ASCII key is simply wrong (401), never a server error.
+    weird = client.post(
+        f"/api/deployments/{regression_bundle}/predict",
+        json={"rows": [example]},
+        headers={"X-API-Key": "clé".encode("latin-1")},
+    )
+    assert weird.status_code == 401
     assert client.get("/api/deployments/notarun").status_code == 404
 
 

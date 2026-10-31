@@ -504,6 +504,7 @@ def plan_model_search(
     prediction_goal: str,
     retry_attempt: int,
     retry_feedback: str | None,
+    dataset_hash: str | None = None,
 ) -> ModelSearchPlan:
     """Produce a bounded hyperparameter plan that the ADK agent will execute."""
 
@@ -559,8 +560,11 @@ def plan_model_search(
         try:
             if _offline():
                 raise RuntimeError("LLM_MODE is not live")
+            # The cache key also names the dataset, so two datasets of the same
+            # shape and goal never share a plan.
+            cache_key = {**safe_input, "dataset_hash": dataset_hash}
             cached = _from_cache(
-                "model_search_plan", safe_input, ModelSearchPlan,
+                "model_search_plan", cache_key, ModelSearchPlan,
                 "Model Selection Agent (ADK)", "adk",
             )
             if cached is not None:
@@ -571,7 +575,7 @@ def plan_model_search(
             plan = ModelSearchPlan.model_validate(_normalise_search_plan(_json_value(response)))
             _validate_search_plan(plan, task_type)
             plan = plan.model_copy(update={"source": source})
-            _to_cache("model_search_plan", safe_input, plan)
+            _to_cache("model_search_plan", cache_key, plan)
             update_span_io(span, output={**plan.model_dump(), "fallback_used": False})
             return plan
         except Exception as exc:
@@ -612,19 +616,33 @@ def choose_model(
     eligible_candidates = [
         candidate for candidate in candidates if str(candidate["name"]) in eligible
     ]
-    fallback_candidate = min(
-        eligible_candidates,
-        key=lambda candidate: (
-            int(candidate.get("training_time_ms", 0)),
-            str(candidate["name"]),
-        ),
-    )
-    fallback = ModelChoice(
-        selected_model_name=str(fallback_candidate["name"]),
-        reasoning=(
+    if retry_feedback:
+        # The previous model missed the quality bar: on a retry the rule picks
+        # the best score in the band instead of the fastest model.
+        fallback_candidate = (max if maximize else min)(
+            eligible_candidates,
+            key=lambda candidate: float(candidate["metric_value"]),
+        )
+        rule = (
+            "Selected the best-scoring candidate inside the deterministic one-percent "
+            "quality band (retry after failed evaluation) because the live decision "
+            "model was unavailable or invalid."
+        )
+    else:
+        fallback_candidate = min(
+            eligible_candidates,
+            key=lambda candidate: (
+                int(candidate.get("training_time_ms", 0)),
+                str(candidate["name"]),
+            ),
+        )
+        rule = (
             "Selected the fastest candidate inside the deterministic one-percent "
             "quality band because the live decision model was unavailable or invalid."
-        ),
+        )
+    fallback = ModelChoice(
+        selected_model_name=str(fallback_candidate["name"]),
+        reasoning=rule,
         tradeoffs=["Quality eligibility was enforced before speed was considered."],
         confidence=0.5,
         source="fallback",
@@ -656,8 +674,17 @@ def choose_model(
         try:
             if _offline():
                 raise RuntimeError("LLM_MODE is not live")
+            # Training times change on every run, so they are left out of the
+            # cache key; scores and settings are deterministic for a fixed seed.
+            cache_key = {
+                **safe_input,
+                "candidates": [
+                    {key: value for key, value in candidate.items() if key != "training_time_ms"}
+                    for candidate in candidates
+                ],
+            }
             cached = _from_cache(
-                "model_choice", safe_input, ModelChoice, "Model Selection Agent (ADK)", "adk"
+                "model_choice", cache_key, ModelChoice, "Model Selection Agent (ADK)", "adk"
             )
             if cached is not None and cached.selected_model_name in eligible:
                 update_span_io(span, output={**cached.model_dump(), "fallback_used": False})
@@ -669,7 +696,7 @@ def choose_model(
                 raise ValueError("LLM selected a model outside the quality band")
             if not math.isfinite(choice.confidence):
                 raise ValueError("LLM confidence must be finite")
-            _to_cache("model_choice", safe_input, choice)
+            _to_cache("model_choice", cache_key, choice)
             update_span_io(span, output={**choice.model_dump(), "fallback_used": False})
             return choice
         except Exception as exc:

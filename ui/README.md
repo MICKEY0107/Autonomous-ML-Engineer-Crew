@@ -41,7 +41,7 @@ To enable the dashboard's **View MLflow** link, run:
 .\scripts\start_dashboard_mlflow.bat
 ```
 
-This serves the shared dashboard experiment store at <http://127.0.0.1:5001>.
+This serves the shared dashboard experiment store at <http://127.0.0.1:5055>.
 The launcher uses one worker for reliable local startup on Windows.
 
 ## Production build

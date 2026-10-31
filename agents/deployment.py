@@ -65,7 +65,8 @@ def _feature_schema(train_csv: Path, features: list[str]) -> list[dict[str, Any]
                 }
             )
         else:
-            counts = series.astype(str).value_counts()
+            # Blank cells are missing values, not a category called "nan".
+            counts = series.dropna().astype(str).value_counts()
             schema.append(
                 {
                     "name": column,

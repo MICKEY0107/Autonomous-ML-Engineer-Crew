@@ -288,6 +288,34 @@ def _fmt(value: Any) -> str:
     return f"{number:.3g}" if abs(number) < 1 else f"{number:,.2f}"
 
 
+def _exhausted_note(attempts: list[dict[str, Any]], last_model: str) -> str:
+    """Name the attempt that came closest to the bar, not just the last one."""
+
+    scored = []
+    for item in attempts:
+        evaluation = item.get("evaluation") or {}
+        metric = evaluation.get("primary_metric")
+        value = (evaluation.get("held_out_metrics") or {}).get(metric)
+        if metric and value is not None:
+            scored.append((float(value), item, evaluation))
+    if not scored:
+        return (
+            f"No model reached the quality bar after {len(attempts)} attempts; "
+            f"the last one tried was {last_model}."
+        )
+    lower_is_better = "min" in str(scored[0][2].get("direction", "")).casefold()
+    value, best, evaluation = (min if lower_is_better else max)(scored, key=lambda row: row[0])
+    name = str(best.get("selected_model") or last_model).replace("_", " ")
+    note = (
+        f"No model reached the quality bar after {len(attempts)} attempts; the closest was "
+        f"{name} on attempt {best.get('attempt')} ({evaluation.get('primary_metric')} "
+        f"{_fmt(value)} vs target {_fmt(evaluation.get('threshold'))})."
+    )
+    if best is not attempts[-1]:
+        note += " The charts below describe the final attempt."
+    return note
+
+
 def findings(insights: dict[str, Any], final: dict[str, Any]) -> list[str]:
     data = insights.get("dataset", {})
     perf = insights.get("performance", {})
@@ -299,9 +327,7 @@ def findings(insights: dict[str, Any], final: dict[str, Any]) -> list[str]:
     if status == "SUCCESS":
         notes.append(f"A {model} model passed the held-out quality check and is ready to use.")
     elif status == "FAILED_EVAL_EXHAUSTED":
-        notes.append(
-            f"No model reached the quality bar after {len(attempts)} attempts; the best was {model}."
-        )
+        notes.append(_exhausted_note(attempts, model))
     if perf.get("kind") == "regression":
         notes.append(
             f"On unseen data, predictions are off by {_fmt(perf.get('mae'))} on average "

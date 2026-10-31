@@ -366,6 +366,7 @@ def _train_candidates(request: ModelSelectionRequest) -> tuple[
         prediction_goal=request.prediction_goal,
         retry_attempt=request.retry_attempt,
         retry_feedback=request.retry_feedback,
+        dataset_hash=request.data_prep_result.dataset_hash,
     )
     train_features, validation_features, train_target, validation_target = (
         _split_training_data(features, target, request)

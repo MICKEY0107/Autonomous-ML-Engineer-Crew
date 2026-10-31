@@ -81,6 +81,12 @@ SPAN_STAGE_NAMES = {
 }
 
 
+def _forced_fail_threshold(task_type: Any) -> float:
+    """0.99 F1 for classification; RMSE 0 (a perfect fit) for regression."""
+
+    return 0.99 if str(task_type) == "classification" else 0.0
+
+
 def _fresh_stages() -> list[dict[str, Any]]:
     return [
         {
@@ -110,6 +116,7 @@ _state: dict[str, Any] = {
     "updated_at": datetime.now(timezone.utc).isoformat(),
 }
 _worker: threading.Thread | None = None
+_starting = False
 
 
 def _snapshot() -> dict[str, Any]:
@@ -219,7 +226,10 @@ class _DashboardSpanExporter(SpanExporter):
                 continue
             duration_ms = int(((span.end_time or 0) - (span.start_time or 0)) / 1_000_000)
             stage_name = SPAN_STAGE_NAMES.get(span.name)
-            if stage_name:
+            span_failed = span.status.status_code.name == "ERROR"
+            with _lock:
+                already_failed = bool(stage_name) and _stage(stage_name)["status"] == "failed"
+            if stage_name and not already_failed:
                 span_input = _safe_json_attribute(
                     attributes.get(LANGFUSE_OBSERVATION_INPUT)
                 )
@@ -228,9 +238,13 @@ class _DashboardSpanExporter(SpanExporter):
                 )
                 _set_stage(
                     stage_name,
-                    "success",
+                    "failed" if span_failed else "success",
                     duration_ms=duration_ms,
-                    detail=f"Completed in {duration_ms / 1000:.2f}s",
+                    detail=(
+                        f"Failed after {duration_ms / 1000:.2f}s"
+                        if span_failed
+                        else f"Completed in {duration_ms / 1000:.2f}s"
+                    ),
                     reasoning={
                         key: value
                         for key, value in {
@@ -780,7 +794,8 @@ def _run_job(
             a2a_url=DEFAULT_A2A_URL,
             tracking_uri=f"sqlite:///{UI_MLFLOW_DATABASE.as_posix()}",
             artifact_dir=artifact_dir,
-            evaluation_threshold=0.99 if force_fail_eval else None,
+            # Forced-fail demo: an unreachable bar in the metric's own direction.
+            evaluation_threshold=_forced_fail_threshold(task_type) if force_fail_eval else None,
             suppress_flow_events=True,
         )
         flow.kickoff()
@@ -815,6 +830,13 @@ def _run_job(
             "llm_summary": result.llm_summary,
         }
         deployment = state.deployment_result
+        deployment_error = flow.deployment_error
+        if deployment is not None and str(deployment.health_status) != "healthy":
+            # Only a healthy deployment is offered to the user as a live endpoint.
+            deployment_error = deployment_error or (
+                f"Deployment health check reported {deployment.health_status}"
+            )
+            deployment = None
         final_result.update(
             {
                 "prediction_goal": state.prediction_goal,
@@ -822,15 +844,15 @@ def _run_job(
                 "task_type": str(state.task_type),
                 "endpoint": str(deployment.service_url) if deployment else None,
                 "deployment": deployment.model_dump(mode="json") if deployment else None,
-                "deployment_error": flow.deployment_error,
+                "deployment_error": deployment_error,
                 "model_card_markdown": result.model_card_markdown,
             }
         )
-        if deployment is None and _stage("Deployment Agent")["status"] == "pending":
+        if deployment is None and (deployment_error or _stage("Deployment Agent")["status"] == "pending"):
             _set_stage(
                 "Deployment Agent",
-                "failed" if flow.deployment_error else "pending",
-                detail=flow.deployment_error or "Deploys only a model that passed evaluation",
+                "failed" if deployment_error else "pending",
+                detail=deployment_error or "Deploys only a model that passed evaluation",
             )
         try:
             run_insights = build_run_insights(
@@ -868,13 +890,30 @@ def _run_job(
             detail=str(state.status),
             duration_ms=int(runtime_seconds * 1_000),
         )
-        _apply_state_reasoning(state, final_result)
+        # Reporting extras must never turn a finished run into a failure.
+        try:
+            _apply_state_reasoning(state, final_result)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            trace_tree = _trace_tree(state)
+        except Exception:  # noqa: BLE001
+            trace_tree = None
         with _lock:
+            # Which stage stopped the run (FAILED_INPUT also covers later stage errors).
+            final_result["failed_stage"] = next(
+                (
+                    item["name"]
+                    for item in _state["stages_completed"]
+                    if item["status"] == "failed" and item["name"] != "Terminal Result"
+                ),
+                None,
+            )
             _state["status"] = "success" if terminal_success else "failed"
             _state["current_stage"] = "Terminal Result"
             _state["retry_count"] = state.retry_count
             _state["final_result"] = final_result
-            _state["trace_data"] = _trace_tree(state)
+            _state["trace_data"] = trace_tree
             _state["llm_insights"] = llm_insights
             _state["insights"] = run_insights
             _state["a2a"] = a2a_log
@@ -973,11 +1012,26 @@ async def run_pipeline_endpoint(
     prediction_goal: str = Form(...),
     force_fail_eval: bool = Form(False),
 ) -> dict[str, Any]:
-    global _worker
+    global _worker, _starting
     with _lock:
-        if _worker is not None and _worker.is_alive():
+        if _starting or (_worker is not None and _worker.is_alive()):
             raise HTTPException(status_code=409, detail="A pipeline run is already active")
+        # Reserve the slot before awaiting the upload so two clicks cannot both start.
+        _starting = True
+    try:
+        return await _start_run(csv_file, target_column, prediction_goal, force_fail_eval)
+    finally:
+        with _lock:
+            _starting = False
 
+
+async def _start_run(
+    csv_file: UploadFile,
+    target_column: str,
+    prediction_goal: str,
+    force_fail_eval: bool,
+) -> dict[str, Any]:
+    global _worker
     filename = Path(csv_file.filename or "upload.csv").name
     if not filename.casefold().endswith(".csv"):
         raise HTTPException(status_code=422, detail="Only CSV uploads are accepted")
@@ -1165,14 +1219,22 @@ def sample_file(name: str) -> FileResponse:
 # ------------------------------------------------------------ deployed models
 def _check_api_key(x_api_key: str | None) -> None:
     expected = os.getenv("PREDICT_API_KEY")
-    if expected and not (x_api_key and secrets.compare_digest(x_api_key, expected)):
+    if expected and not (x_api_key and secrets.compare_digest(x_api_key.encode("utf-8"), expected.encode("utf-8"))):
         raise HTTPException(status_code=401, detail="missing or invalid X-API-Key")
 
 
 def _bundle(run_hex: str) -> tuple[Any, dict[str, Any]]:
-    if not run_hex.isalnum() or not (bundle_dir(run_hex) / "metadata.json").is_file():
+    directory = bundle_dir(run_hex) if run_hex.isalnum() else None
+    if directory is None or not all(
+        (directory / name).is_file() for name in ("metadata.json", "model.joblib")
+    ):
         raise HTTPException(status_code=404, detail="No deployed model for this run")
-    return load_bundle(run_hex)
+    try:
+        return load_bundle(run_hex)
+    except Exception as exc:  # corrupt or incompatible bundle
+        raise HTTPException(
+            status_code=503, detail=f"Deployed model could not be loaded ({type(exc).__name__})"
+        ) from exc
 
 
 @app.get("/api/deployments/{run_hex}")

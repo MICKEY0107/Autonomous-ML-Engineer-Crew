@@ -245,7 +245,7 @@ LANGFUSE_PROJECT_ID=your-project-id
 A2A_AGENT_URL=http://localhost:8080
 A2A_BIND_HOST=127.0.0.1
 A2A_BIND_PORT=8080
-MLFLOW_UI_URL=http://127.0.0.1:5001
+MLFLOW_UI_URL=http://127.0.0.1:5055
 API_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 VITE_API_PROXY_TARGET=http://127.0.0.1:8000
 ```
@@ -283,7 +283,7 @@ Dashboard executions share `artifacts/ui/mlflow.db`. Start its UI with:
 .\scripts\start_dashboard_mlflow.bat
 ```
 
-Then open <http://127.0.0.1:5001>.
+Then open <http://127.0.0.1:5055>.
 
 The end-to-end scripts use `artifacts/e2e/mlflow.db`. To inspect that store, run:
 
@@ -291,7 +291,7 @@ The end-to-end scripts use `artifacts/e2e/mlflow.db`. To inspect that store, run
 .\scripts\start_mlflow.bat
 ```
 
-Only one process can use port `5001` at a time.
+Only one process can use port `5055` at a time.
 
 ## Command-line usage
 
@@ -609,7 +609,7 @@ work without cloud tracing.
 
 ### MLflow UI does not open
 
-Start the correct store script and confirm that port `5001` is free. The dashboard
+Start the correct store script and confirm that port `5055` is free. The dashboard
 and E2E scripts use different SQLite files.
 
 ## Verification reports

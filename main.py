@@ -656,7 +656,11 @@ def main(argv: list[str] | None = None) -> int:
             a2a_url=DEFAULT_A2A_URL,
             tracking_uri=f"sqlite:///{tracking_database.as_posix()}",
             artifact_dir=artifact_dir,
-            evaluation_threshold=0.99 if args.force_fail_eval else None,
+            evaluation_threshold=(
+                (0.99 if str(state.task_type) == "classification" else 0.0)
+                if args.force_fail_eval
+                else None
+            ),
             suppress_flow_events=True,
         )
         started = time.perf_counter()

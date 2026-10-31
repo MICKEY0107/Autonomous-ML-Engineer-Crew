@@ -225,16 +225,18 @@ def generate_pipeline_summary(
 ) -> str:
     """Summarize a completed pipeline run for a technical audience."""
 
+    # The summary is written before deployment and reporting finish, so the
+    # runtime is kept out of the text (the dashboard shows the real total).
     prompt = (
         "You are an AI system. Summarize this ML pipeline run in 2 sentences for "
         f"a technical audience. Status: {status}. Model: {model_name}. "
         f"{metric_name}: {metric_value:.4f}. Retries used: {retry_count}. "
-        f"Runtime: {runtime_s:.1f}s."
+        "Do not mention runtime or duration."
     )
     fallback = (
         f"The pipeline finished with status {status} using {model_name}; "
         f"held-out {metric_name} was {metric_value:.4f}. "
-        f"It used {retry_count} retries and completed in {runtime_s:.1f} seconds."
+        f"It used {retry_count} retries."
     )
     return _call_reasoner(
         span_name="llm.reasoning.pipeline_summary",

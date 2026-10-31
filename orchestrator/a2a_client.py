@@ -88,6 +88,21 @@ def agent_base_url(url: str) -> str:
     return url
 
 
+def _selected_metric(result: ModelSelectionResult) -> tuple[str, float]:
+    """The metric the agent actually selected on (RMSE for regression, F1 for classification)."""
+
+    selected = next(
+        (item for item in result.candidates if item.get("selected")),
+        None,
+    )
+    if selected is not None:
+        name = selected.get("primary_metric")
+        value = (selected.get("metrics") or {}).get(name)
+        if name and value is not None:
+            return str(name), float(value)
+    return "score", result.metric_value
+
+
 def _parse_result(texts: list[str]) -> ModelSelectionResult:
     # The agent's final answer is the last text that validates as the contract.
     last_error: Exception | None = None
@@ -180,7 +195,8 @@ async def send_model_selection_task_async(
             "request": _request_summary(payload),
             "response": {
                 "best_model": result.best_model_name,
-                "metric_value": result.metric_value,
+                "metric_name": _selected_metric(result)[0],
+                "metric_value": _selected_metric(result)[1],
                 "candidate_count": len(result.candidate_run_ids),
                 "best_run_id": result.best_run_id,
                 "model_uri": result.best_model_uri,
