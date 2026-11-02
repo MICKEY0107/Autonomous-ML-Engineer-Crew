@@ -266,6 +266,40 @@ export interface DeploymentMetadata {
   held_out_metrics?: Record<string, number>;
   primary_metric?: string;
   auth_required?: boolean;
+  deploy_target?: string;
+  serving_policy?: ServingPolicy;
+}
+
+export interface ServingPolicy {
+  max_rows_per_request: number;
+  rate_limit_per_minute: number;
+  latency_alert_ms: number;
+  error_rate_alert_pct: number;
+  reasoning: string;
+  source: string;
+}
+
+export interface MonitoringSnapshot {
+  requests: number;
+  rows_scored: number;
+  errors: number;
+  rejected_by_policy: number;
+  error_rate_pct: number;
+  latency_p50_ms: number | null;
+  latency_p95_ms: number | null;
+  last_error: string | null;
+  last_request_at: string | null;
+  since: string;
+  alerts: string[];
+  status: "ok" | "alert";
+  policy: ServingPolicy;
+}
+
+export interface DeploymentHealth {
+  status: string;
+  run_id: string;
+  model: string;
+  auth_required: boolean;
 }
 
 export interface Prediction {
@@ -283,6 +317,7 @@ export interface LlmInsights {
   data_prep: string;
   model_selection: string;
   evaluation: string;
+  deployment?: string;
   summary: string;
 }
 

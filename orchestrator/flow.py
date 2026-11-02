@@ -177,7 +177,11 @@ class AutonomousMLEngineerFlow(Flow[PipelineState]):
     tracking_uri: str = Field(default_factory=_default_tracking_uri)
     artifact_dir: str = str(DEFAULT_ARTIFACT_DIR)
     evaluation_threshold: float | None = None
-    request_timeout_seconds: float = Field(default=120.0, gt=0)
+    # The ADK agent makes two LLM decisions, each of which may walk the whole
+    # provider chain (a local model can take minutes), so allow enough time.
+    request_timeout_seconds: float = Field(
+        default_factory=lambda: float(os.getenv("A2A_TIMEOUT_SECONDS", "360")), gt=0
+    )
     llm_summary: str = ""
     # One entry per model-selection/evaluation attempt, for the dashboard's
     # retry timeline (row-free: candidates, metrics, feedback).

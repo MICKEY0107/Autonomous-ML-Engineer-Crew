@@ -1,16 +1,5 @@
 import axios from "axios";
-import type {
-  DeploymentMetadata,
-  GuardrailCheck,
-  PipelineResultResponse,
-  PipelineStatusResponse,
-  Prediction,
-  ProvidersResponse,
-  ResultPayload,
-  RunInput,
-  RunSummary,
-  SampleDataset,
-} from "./types";
+import type { DeploymentMetadata, GuardrailCheck, PipelineResultResponse, PipelineStatusResponse, Prediction, ProvidersResponse, ResultPayload, RunInput, RunSummary, SampleDataset, DeploymentHealth, MonitoringSnapshot } from "./types";
 
 const api = axios.create({
   baseURL: "/api",
@@ -80,8 +69,18 @@ function keyHeader(apiKey?: string): Record<string, string> {
   return apiKey ? { "X-API-Key": apiKey } : {};
 }
 
-export async function getDeployment(runHex: string): Promise<DeploymentMetadata> {
-  const response = await api.get<DeploymentMetadata>(`/deployments/${runHex}`);
+export async function getDeployment(runHex: string, apiKey?: string): Promise<DeploymentMetadata> {
+  const response = await api.get<DeploymentMetadata>(`/deployments/${runHex}`, { headers: keyHeader(apiKey) });
+  return response.data;
+}
+
+export async function getDeploymentHealth(runHex: string): Promise<DeploymentHealth> {
+  const response = await api.get<DeploymentHealth>(`/deployments/${runHex}/health`);
+  return response.data;
+}
+
+export async function getDeploymentMetrics(runHex: string, apiKey?: string): Promise<MonitoringSnapshot> {
+  const response = await api.get<MonitoringSnapshot>(`/deployments/${runHex}/metrics`, { headers: keyHeader(apiKey) });
   return response.data;
 }
 

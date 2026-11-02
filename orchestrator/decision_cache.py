@@ -38,6 +38,8 @@ def key(stage: str, inputs: dict[str, Any]) -> str:
         {
             "stage": stage,
             "model": os.getenv("CREWAI_MODEL", ""),
+            # A different provider chain is a different decision-maker.
+            "chain": os.getenv("LLM_FALLBACK_CHAIN", ""),
             "inputs": inputs,
         },
         sort_keys=True,

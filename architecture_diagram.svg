@@ -1,146 +1,52 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
-  <defs>
-    <style>
-      .bg { fill: #f6f8fb; }
-      .title { font: 700 36px Arial, sans-serif; fill: #172033; }
-      .subtitle { font: 400 18px Arial, sans-serif; fill: #5a6475; }
-      .section-title { font: 700 21px Arial, sans-serif; fill: #1c2c4a; }
-      .small-title { font: 700 18px Arial, sans-serif; fill: #1c2c4a; }
-      .body { font: 400 15px Arial, sans-serif; fill: #2f3a4d; }
-      .small { font: 400 13px Arial, sans-serif; fill: #506078; }
-      .chip { font: 700 13px Arial, sans-serif; fill: #234066; }
-      .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; rx: 14; }
-      .input { fill: #fff7ed; stroke: #fdba74; }
-      .crew { fill: #eef6ff; stroke: #60a5fa; stroke-width: 3; rx: 22; }
-      .adk { fill: #f0fdf4; stroke: #86efac; stroke-width: 3; rx: 22; }
-      .agent { fill: #ffffff; stroke: #8fb7dc; stroke-width: 2; rx: 14; }
-      .eval { fill: #ffffff; stroke: #f59e0b; stroke-width: 2; rx: 14; }
-      .deploy { fill: #ffffff; stroke: #14b8a6; stroke-width: 2; rx: 14; }
-      .output { fill: #f8fafc; stroke: #94a3b8; stroke-width: 2; rx: 14; }
-      .tool { fill: #ffffff; stroke: #d8dee9; stroke-width: 1.8; rx: 12; }
-      .decision { fill: #fff7ed; stroke: #fb923c; stroke-width: 2; }
-      .arrow { stroke: #334155; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
-      .loop { stroke: #dc2626; stroke-width: 2.8; fill: none; marker-end: url(#arrow-red); stroke-dasharray: 7 7; }
-      .handoff { stroke: #2563eb; stroke-width: 2.5; fill: none; marker-end: url(#arrow-blue); }
-      .note { fill: #ffffff; stroke: #dbe4ef; stroke-width: 1.5; rx: 12; }
-    </style>
-    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
-      <path d="M2,2 L10,6 L2,10 Z" fill="#334155" />
-    </marker>
-    <marker id="arrow-blue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
-      <path d="M2,2 L10,6 L2,10 Z" fill="#2563eb" />
-    </marker>
-    <marker id="arrow-red" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
-      <path d="M2,2 L10,6 L2,10 Z" fill="#dc2626" />
-    </marker>
-  </defs>
-
-  <rect class="bg" x="0" y="0" width="1600" height="1000" />
-
-  <text class="title" x="80" y="70">Autonomous ML Engineer Crew - Architecture</text>
-  <text class="subtitle" x="80" y="104">A CrewAI-orchestrated, Google ADK powered multi-agent pipeline for automated model building, evaluation, and deployment</text>
-
-  <rect class="input card" x="70" y="190" width="240" height="245" />
-  <text class="section-title" x="95" y="228">User Input</text>
-  <text class="body" x="95" y="267">Raw CSV dataset</text>
-  <text class="body" x="95" y="300">Target column</text>
-  <text class="body" x="95" y="333">Prediction goal</text>
-  <text class="body" x="95" y="366">Task type:</text>
-  <text class="small" x="115" y="393">Classification or regression</text>
-
-  <rect class="crew" x="370" y="160" width="1010" height="250" />
-  <text class="section-title" x="400" y="200">CrewAI Flow Layer</text>
-  <text class="body" x="400" y="232">Owns orchestration, shared state, sequencing, conditional routing, and the bounded retry loop.</text>
-
-  <rect class="note" x="410" y="265" width="255" height="95" />
-  <text class="small-title" x="435" y="296">Shared Pipeline State</text>
-  <text class="small" x="435" y="323">Dataset path, target column,</text>
-  <text class="small" x="435" y="345">metrics, model artifact, status</text>
-
-  <rect class="note" x="710" y="265" width="255" height="95" />
-  <text class="small-title" x="735" y="296">Control Policy</text>
-  <text class="small" x="735" y="323">Agent order, pass/fail gate,</text>
-  <text class="small" x="735" y="345">retry budget, failure handling</text>
-
-  <rect class="note" x="1010" y="265" width="305" height="95" />
-  <text class="small-title" x="1035" y="296">Agent Handoffs</text>
-  <text class="small" x="1035" y="323">Each stage reasons, records output,</text>
-  <text class="small" x="1035" y="345">and passes context to the next agent</text>
-
-  <rect class="adk" x="120" y="500" width="1270" height="305" />
-  <text class="section-title" x="150" y="540">Google ADK Specialist Agent Layer</text>
-  <text class="body" x="150" y="570">Defines specialist agents, exposes tools, and extends the google/adk-samples machine-learning-engineering core.</text>
-
-  <rect class="agent" x="160" y="610" width="225" height="135" />
-  <text class="small-title" x="185" y="645">Data-Prep Agent</text>
-  <text class="small" x="185" y="675">Ingests dataset</text>
-  <text class="small" x="185" y="697">Cleans missing values</text>
-  <text class="small" x="185" y="719">Engineers features</text>
-
-  <rect class="agent" x="430" y="610" width="250" height="135" />
-  <text class="small-title" x="455" y="645">Model-Selection &amp;</text>
-  <text class="small-title" x="455" y="668">Tuning Agent</text>
-  <text class="small" x="455" y="698">Trains candidates</text>
-  <text class="small" x="455" y="720">Tunes hyperparameters</text>
-
-  <rect class="eval" x="725" y="610" width="225" height="135" />
-  <text class="small-title" x="750" y="645">Evaluation Agent</text>
-  <text class="small" x="750" y="675">Runs held-out validation</text>
-  <text class="small" x="750" y="697">Computes metrics</text>
-  <text class="small" x="750" y="719">Writes report card</text>
-
-  <polygon class="decision" points="1045,618 1125,678 1045,738 965,678" />
-  <text class="small-title" x="1045" y="670" text-anchor="middle">Pass</text>
-  <text class="small-title" x="1045" y="692" text-anchor="middle">quality gate?</text>
-
-  <rect class="deploy" x="1165" y="610" width="185" height="135" />
-  <text class="small-title" x="1190" y="645">Deployment /</text>
-  <text class="small-title" x="1190" y="668">Observability Agent</text>
-  <text class="small" x="1190" y="698">Packages model</text>
-  <text class="small" x="1190" y="720">Serves and monitors API</text>
-
-  <rect class="output card" x="1430" y="250" width="115" height="495" />
-  <text class="section-title" x="1452" y="290">Outputs</text>
-  <text class="small" x="1450" y="335">Trained</text>
-  <text class="small" x="1450" y="355">model</text>
-  <text class="small" x="1450" y="410">Live</text>
-  <text class="small" x="1450" y="430">/predict</text>
-  <text class="small" x="1450" y="450">API</text>
-  <text class="small" x="1450" y="505">Model</text>
-  <text class="small" x="1450" y="525">report</text>
-  <text class="small" x="1450" y="545">card</text>
-  <text class="small" x="1450" y="600">Usage</text>
-  <text class="small" x="1450" y="620">and error</text>
-  <text class="small" x="1450" y="640">monitoring</text>
-  <text class="small" x="1450" y="695">Reusable</text>
-  <text class="small" x="1450" y="715">pipeline</text>
-
-  <path class="arrow" d="M310 312 C340 312, 340 312, 370 312" />
-  <path class="handoff" d="M530 410 L270 610" />
-  <path class="handoff" d="M385 678 L430 678" />
-  <path class="handoff" d="M680 678 L725 678" />
-  <path class="handoff" d="M950 678 L965 678" />
-  <path class="handoff" d="M1125 678 L1165 678" />
-  <path class="arrow" d="M1350 678 C1390 678, 1390 500, 1430 500" />
-  <path class="loop" d="M1045 738 C1045 805, 555 805, 555 745" />
-
-  <text class="chip" x="1134" y="662">YES</text>
-  <text class="chip" x="875" y="797" fill="#dc2626">NO: feedback returns for another tuning attempt</text>
-
-  <rect class="card" x="70" y="850" width="1475" height="95" />
-  <text class="section-title" x="100" y="890">Technology and Tooling</text>
-  <rect class="tool" x="360" y="866" width="150" height="48" />
-  <text class="chip" x="435" y="896" text-anchor="middle">Gemini</text>
-  <rect class="tool" x="535" y="866" width="195" height="48" />
-  <text class="chip" x="632" y="896" text-anchor="middle">pandas + scikit-learn</text>
-  <rect class="tool" x="755" y="866" width="150" height="48" />
-  <text class="chip" x="830" y="896" text-anchor="middle">MLflow</text>
-  <rect class="tool" x="930" y="866" width="150" height="48" />
-  <text class="chip" x="1005" y="896" text-anchor="middle">Docker</text>
-  <rect class="tool" x="1105" y="866" width="150" height="48" />
-  <text class="chip" x="1180" y="896" text-anchor="middle">FastAPI</text>
-  <rect class="tool" x="1280" y="866" width="150" height="48" />
-  <text class="chip" x="1355" y="896" text-anchor="middle">Optional MCP</text>
-
-  <text class="small" x="100" y="925">Base implementation reference: google/adk-samples/python/agents/machine-learning-engineering</text>
-</svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="arch" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1146" width="1440" height="1146" role="img" aria-labelledby="arch-title"><title id="arch-title">Architecture of the Autonomous ML Engineer Crew</title><rect width="100%" height="100%" fill="#ffffff"/><style>@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Sans+Condensed:wght@600;700&amp;display=swap');#arch {
+  --bg: #f4f6f8; --sheet: #ffffff; --band: #eaeef2; --ink: #16202a; --muted: #56636f; --rule: #d3d9df;
+  --crew: #4450c4; --adk: #0d7f73; --mcp: #a86a12; --llm: #a82c6f; --guard: #c0461b; --slate: #4a5866; --store: #5d6b7a;
+  --crew-t: #e8eafb; --adk-t: #e1f3f0; --mcp-t: #f8eedc; --llm-t: #f7e4ee; --guard-t: #fbe9e1; --slate-t: #e9edf1; --store-t: #edf0f3;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+} #arch { background: var(--sheet); }
+#arch text { font-family: var(--body); fill: var(--ink); }
+#arch .band { fill: var(--band); }
+#arch .bandnum { font-family: var(--mono); font-size: 12px; fill: var(--muted); letter-spacing: .08em; }
+#arch .bandname { font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: .06em; }
+#arch .bandsub { font-size: 11.5px; fill: var(--muted); }
+#arch .box { fill: var(--sheet); stroke-width: 1.6; }
+#arch .dash { stroke-dasharray: 6 4; }
+#arch .flow { fill: none; stroke: var(--crew); stroke-width: 1.4; stroke-dasharray: 2 0; opacity: .9; }
+#arch .btitle { font-weight: 600; font-size: 14px; }
+#arch .big { font-family: var(--display); font-size: 17px; font-weight: 700; }
+#arch .small { font-size: 12px; fill: var(--muted); }
+#arch .mono { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+#arch .ctitle { font-weight: 600; font-size: 13px; }
+#arch .label, #arch .label2 { font-size: 11.5px; font-weight: 500; }
+#arch .label2 { font-weight: 400; fill: var(--muted); font-size: 11px; }
+#arch .halo { stroke: var(--band); stroke-width: 6px; stroke-linejoin: round; paint-order: stroke; fill: var(--band); }
+#arch .pilltxt { font-family: var(--mono); font-size: 10.5px; font-weight: 500; }
+#arch .chip { fill: var(--slate-t); }
+#arch .chainbox { fill: var(--llm-t); }
+#arch .rule { stroke: var(--rule); stroke-width: 1; }
+#arch .arr, #arch .arr-llm { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+#arch .arr-llm { stroke: var(--llm); }
+#arch .loop { fill: none; stroke: var(--guard); stroke-width: 1.6; stroke-dasharray: 5 4; }
+#arch .mcp-a { fill: none; stroke: var(--mcp); stroke-width: 1.8; }
+#arch .a2a { fill: none; stroke: var(--adk); stroke-width: 2.2; }
+#arch .mk-arr { fill: var(--ink); } #arch .mk-loop { fill: var(--guard); } #arch .mk-mcp-a { fill: var(--mcp); }
+#arch .mk-a2a { fill: var(--adk); } #arch .mk-arr-llm { fill: var(--llm); }
+#arch .dot-llm { fill: var(--llm); }
+#arch .sw { stroke-width: 1.6; }
+#arch .st-crew { stroke: var(--crew); } #arch .sw.st-crew { fill: var(--crew-t); }
+#arch .st-adk { stroke: var(--adk); } #arch .sw.st-adk { fill: var(--adk-t); }
+#arch .st-mcp { stroke: var(--mcp); } #arch .sw.st-mcp { fill: var(--mcp-t); }
+#arch .st-llm { stroke: var(--llm); } #arch .sw.st-llm { fill: var(--llm-t); }
+#arch .st-guard { stroke: var(--guard); } #arch .sw.st-guard { fill: var(--guard-t); }
+#arch .st-slate { stroke: var(--slate); }
+#arch .st-store { stroke: var(--store); } #arch .sw.st-store { fill: var(--store-t); }
+#arch .pill-crew { fill: var(--crew-t); } #arch .ink-crew { fill: var(--crew); }
+#arch .pill-adk { fill: var(--adk-t); } #arch .ink-adk { fill: var(--adk); }
+#arch .pill-mcp { fill: var(--mcp-t); } #arch .ink-mcp { fill: var(--mcp); }
+#arch .pill-llm { fill: var(--llm-t); } #arch .ink-llm { fill: var(--llm); }
+#arch .pill-guard { fill: var(--guard-t); } #arch .ink-guard { fill: var(--guard); }
+#arch .pill-slate { fill: var(--slate-t); } #arch .ink-slate { fill: var(--slate); }
+#arch .pill-store { fill: var(--store-t); } #arch .ink-store { fill: var(--store); }</style><defs><marker id="ah-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-arr"/></marker><marker id="ahs-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-arr"/></marker><marker id="ah-loop" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-loop"/></marker><marker id="ahs-loop" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-loop"/></marker><marker id="ah-mcp-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-mcp-a"/></marker><marker id="ahs-mcp-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-mcp-a"/></marker><marker id="ah-a2a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-a2a"/></marker><marker id="ahs-a2a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-a2a"/></marker><marker id="ah-arr-llm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-arr-llm"/></marker><marker id="ahs-arr-llm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-arr-llm"/></marker></defs><rect x="12" y="14" width="1416" height="128" rx="16" class="band"/><text x="30" y="42" class="bandnum" text-anchor="start">01</text><text x="30" y="64" class="bandname" text-anchor="start">INTERFACE</text><text x="30" y="83" class="bandsub" text-anchor="start">who starts</text><text x="30" y="97" class="bandsub" text-anchor="start">a run</text><rect x="12" y="154" width="1416" height="124" rx="16" class="band"/><text x="30" y="182" class="bandnum" text-anchor="start">02</text><text x="30" y="204" class="bandname" text-anchor="start">API</text><text x="30" y="223" class="bandsub" text-anchor="start">HTTP service</text><rect x="12" y="290" width="1416" height="304" rx="16" class="band"/><text x="30" y="318" class="bandnum" text-anchor="start">03</text><text x="30" y="340" class="bandname" text-anchor="start">ORCHESTRATION</text><text x="30" y="359" class="bandsub" text-anchor="start">CrewAI Flow</text><text x="30" y="373" class="bandsub" text-anchor="start">state machine</text><rect x="12" y="606" width="1416" height="208" rx="16" class="band"/><text x="30" y="634" class="bandnum" text-anchor="start">04</text><text x="30" y="656" class="bandname" text-anchor="start">AGENTS</text><text x="30" y="673" class="bandname" text-anchor="start">&amp; TOOLS</text><text x="30" y="692" class="bandsub" text-anchor="start">remote agent,</text><text x="30" y="706" class="bandsub" text-anchor="start">MCP tools,</text><text x="30" y="720" class="bandsub" text-anchor="start">serving</text><rect x="12" y="826" width="1416" height="124" rx="16" class="band"/><text x="30" y="854" class="bandnum" text-anchor="start">05</text><text x="30" y="876" class="bandname" text-anchor="start">LLM LAYER</text><text x="30" y="895" class="bandsub" text-anchor="start">who makes</text><text x="30" y="909" class="bandsub" text-anchor="start">each decision</text><rect x="12" y="962" width="1416" height="124" rx="16" class="band"/><text x="30" y="990" class="bandnum" text-anchor="start">06</text><text x="30" y="1012" class="bandname" text-anchor="start">TRACKING</text><text x="30" y="1029" class="bandname" text-anchor="start">&amp; STORAGE</text><text x="30" y="1048" class="bandsub" text-anchor="start">what is kept</text><text x="30" y="1062" class="bandsub" text-anchor="start">after a run</text><rect x="184" y="32" width="250" height="92" rx="10" class="box st-slate"/><text x="196" y="54" class="btitle" text-anchor="start">User</text><text x="196" y="74.0" class="small" text-anchor="start">uploads a CSV, picks the column</text><text x="196" y="89.5" class="small" text-anchor="start">to predict, writes the goal</text><text x="196" y="105.0" class="small" text-anchor="start">in plain words</text><rect x="500" y="32" width="430" height="92" rx="10" class="box st-slate"/><text x="512" y="54" class="btitle" text-anchor="start">React dashboard</text><rect x="887.7" y="41" width="32.3" height="17" rx="8.5" class="pill-slate"/><text x="903.85" y="53.2" class="pilltxt ink-slate" text-anchor="middle">ui/</text><text x="512" y="74.0" class="small" text-anchor="start">Vite · TypeScript · Tailwind · Recharts</text><text x="512" y="89.5" class="small" text-anchor="start">live stage progress, 7 result tabs, predict form,</text><text x="512" y="105.0" class="small" text-anchor="start">safety demos, run history, downloads</text><rect x="1100" y="32" width="316" height="92" rx="10" class="box st-slate"/><text x="1112" y="54" class="btitle" text-anchor="start">Command line · main.py</text><rect x="1373.7" y="41" width="32.3" height="17" rx="8.5" class="pill-slate"/><text x="1389.8500000000001" y="53.2" class="pilltxt ink-slate" text-anchor="middle">CLI</text><text x="1112" y="74.0" class="small" text-anchor="start">same pipeline from a terminal;</text><text x="1112" y="89.5" class="small" text-anchor="start">each decision tagged [LOCAL-LLM],</text><text x="1112" y="105.0" class="small" text-anchor="start">[CACHE], [FALLBACK] …</text><path d="M434,78 H496" class="arr" marker-end="url(#ah-arr)"/><path d="M715,124 V176" class="arr" marker-end="url(#ah-arr)"/><text x="723" y="152" class="label halo" text-anchor="start">HTTP / JSON · polls stage status</text><text x="723" y="152" class="label" text-anchor="start">HTTP / JSON · polls stage status</text><rect x="184" y="172" width="880" height="92" rx="10" class="box st-slate"/><text x="196" y="194" class="btitle" text-anchor="start">FastAPI service · orchestrator_api.py · port 8765</text><rect x="844.8" y="181" width="209.2" height="17" rx="8.5" class="pill-slate"/><text x="949.4" y="193.2" class="pilltxt ink-slate" text-anchor="middle">runs the Flow in a worker thread</text><rect x="196" y="206" width="151.5" height="20" rx="4" class="chip"/><text x="203" y="220" class="mono" text-anchor="start">POST /api/pipeline/run</text><rect x="362" y="206" width="164.0" height="20" rx="4" class="chip"/><text x="369" y="220" class="mono" text-anchor="start">GET /api/pipeline/status</text><rect x="538" y="206" width="126.5" height="20" rx="4" class="chip"/><text x="545" y="220" class="mono" text-anchor="start">GET /api/providers</text><rect x="676" y="206" width="176.5" height="20" rx="4" class="chip"/><text x="683" y="220" class="mono" text-anchor="start">POST /api/guardrails/check</text><rect x="872" y="206" width="114.0" height="20" rx="4" class="chip"/><text x="879" y="220" class="mono" text-anchor="start">GET /api/samples</text><rect x="196" y="234" width="157.8" height="20" rx="4" class="chip"/><text x="203" y="248" class="mono" text-anchor="start">GET /api/runs (history)</text><rect x="372" y="234" width="182.8" height="20" rx="4" class="chip"/><text x="379" y="248" class="mono" text-anchor="start">GET /api/runs/{id}/download</text><rect x="572" y="234" width="226.5" height="20" rx="4" class="chip"/><text x="579" y="248" class="mono" text-anchor="start">POST /api/deployments/{id}/predict</text><rect x="820" y="234" width="126.5" height="20" rx="4" class="chip"/><text x="827" y="248" class="mono" text-anchor="start">POST …/predict_csv</text><path d="M1258,124 V318" class="arr" marker-end="url(#ah-arr)"/><text x="1272" y="196" class="small" text-anchor="start">The CLI runs the</text><text x="1272" y="212" class="small" text-anchor="start">same Flow directly,</text><text x="1272" y="228" class="small" text-anchor="start">without the API.</text><path d="M624,264 V318" class="arr" marker-end="url(#ah-arr)"/><text x="632" y="300" class="label halo" text-anchor="start">kick-off + stage events (FlowCallbacks)</text><text x="632" y="300" class="label" text-anchor="start">kick-off + stage events (FlowCallbacks)</text><rect x="184" y="318" width="1232" height="264" rx="10" class="flow"/><text x="200" y="344" class="btitle big" text-anchor="start">CrewAI Flow · AutonomousMLEngineerFlow</text><text x="200" y="362" class="small" text-anchor="start">one shared PipelineState (Pydantic) travels through every stage</text><rect x="200" y="386" width="180" height="128" rx="10" class="box st-guard"/><text x="212" y="408" class="btitle" text-anchor="start">Input guardrails</text><rect x="325.5" y="377" width="44.5" height="17" rx="8.5" class="pill-guard"/><text x="347.75" y="389.2" class="pilltxt ink-guard" text-anchor="middle">rules</text><text x="212" y="428.0" class="small" text-anchor="start">schema + file-size checks</text><text x="212" y="443.5" class="small" text-anchor="start">prompt-injection filter</text><text x="212" y="459.0" class="small" text-anchor="start">toxic-language filter</text><text x="212" y="474.5" class="small" text-anchor="start">target column must exist</text><line x1="212" y1="490" x2="368" y2="490" class="rule"/><text x="212" y="505" class="mono ink-guard" text-anchor="start">→ PipelineState</text><rect x="404" y="386" width="180" height="128" rx="10" class="box st-crew"/><text x="416" y="408" class="btitle" text-anchor="start">Data-Prep Agent</text><rect x="523.4" y="377" width="50.6" height="17" rx="8.5" class="pill-crew"/><text x="548.6999999999999" y="389.2" class="pilltxt ink-crew" text-anchor="middle">CrewAI</text><text x="416" y="428.0" class="small" text-anchor="start">LLM plans the cleaning:</text><text x="416" y="443.5" class="small" text-anchor="start">impute, encode, drop leaks</text><text x="416" y="459.0" class="small" text-anchor="start">code executes the plan</text><text x="416" y="474.5" class="small" text-anchor="start">train / test split</text><line x1="416" y1="490" x2="572" y2="490" class="rule"/><text x="416" y="505" class="mono ink-crew" text-anchor="start">→ DataPrepResult</text><rect x="608" y="386" width="180" height="128" rx="10" class="box st-adk"/><text x="620" y="408" class="btitle" text-anchor="start">Model-Selection</text><rect x="745.7" y="377" width="32.3" height="17" rx="8.5" class="pill-adk"/><text x="761.85" y="389.2" class="pilltxt ink-adk" text-anchor="middle">A2A</text><text x="620" y="428.0" class="small" text-anchor="start">A2A client: sends the</text><text x="620" y="443.5" class="small" text-anchor="start">task to the ADK agent,</text><text x="620" y="459.0" class="small" text-anchor="start">validates its answer,</text><text x="620" y="474.5" class="small" text-anchor="start">adds retry feedback</text><line x1="620" y1="490" x2="776" y2="490" class="rule"/><text x="620" y="505" class="mono ink-adk" text-anchor="start">→ ModelSelectionResult</text><rect x="812" y="386" width="180" height="128" rx="10" class="box st-crew"/><text x="824" y="408" class="btitle" text-anchor="start">Evaluation Agent</text><rect x="931.4" y="377" width="50.6" height="17" rx="8.5" class="pill-crew"/><text x="956.6999999999999" y="389.2" class="pilltxt ink-crew" text-anchor="middle">CrewAI</text><text x="824" y="428.0" class="small" text-anchor="start">scores the winner on the</text><text x="824" y="443.5" class="small" text-anchor="start">untouched test set;</text><text x="824" y="459.0" class="small" text-anchor="start">LLM reflection explains</text><text x="824" y="474.5" class="small" text-anchor="start">the result + what to try</text><line x1="824" y1="490" x2="980" y2="490" class="rule"/><text x="824" y="505" class="mono ink-crew" text-anchor="start">→ EvaluationResult</text><rect x="1016" y="386" width="180" height="128" rx="10" class="box st-guard dash"/><text x="1028" y="408" class="btitle" text-anchor="start">Quality gate</text><rect x="1135.4" y="377" width="50.6" height="17" rx="8.5" class="pill-guard"/><text x="1160.7" y="389.2" class="pilltxt ink-guard" text-anchor="middle">router</text><text x="1028" y="428.0" class="small" text-anchor="start">metric meets target?</text><text x="1028" y="443.5" class="small" text-anchor="start">yes → deploy</text><text x="1028" y="459.0" class="small" text-anchor="start">no, retries left → retry</text><text x="1028" y="474.5" class="small" text-anchor="start">no retries left → stop</text><line x1="1028" y1="490" x2="1184" y2="490" class="rule"/><text x="1028" y="505" class="mono ink-guard" text-anchor="start">→ success / retry / stop</text><rect x="1220" y="386" width="180" height="128" rx="10" class="box st-crew"/><text x="1232" y="408" class="btitle" text-anchor="start">Deployment Agent</text><rect x="1339.4" y="377" width="50.6" height="17" rx="8.5" class="pill-crew"/><text x="1364.7" y="389.2" class="pilltxt ink-crew" text-anchor="middle">CrewAI</text><text x="1232" y="428.0" class="small" text-anchor="start">only after a pass; LLM</text><text x="1232" y="443.5" class="small" text-anchor="start">sets serving limits +</text><text x="1232" y="459.0" class="small" text-anchor="start">alert thresholds; code</text><text x="1232" y="474.5" class="small" text-anchor="start">packages + health-checks</text><line x1="1232" y1="490" x2="1388" y2="490" class="rule"/><text x="1232" y="505" class="mono ink-crew" text-anchor="start">→ DeploymentResult</text><path d="M380,450.0 H400" class="arr" marker-end="url(#ah-arr)"/><path d="M584,450.0 H604" class="arr" marker-end="url(#ah-arr)"/><path d="M788,450.0 H808" class="arr" marker-end="url(#ah-arr)"/><path d="M992,450.0 H1012" class="arr" marker-end="url(#ah-arr)"/><path d="M1196,450.0 H1216" class="arr" marker-end="url(#ah-arr)"/><circle cx="576" cy="505" r="4.5" class="dot-llm"/><circle cx="984" cy="505" r="4.5" class="dot-llm"/><circle cx="1392" cy="505" r="4.5" class="dot-llm"/><path d="M1106,386 V374 H698 V382" class="loop" marker-end="url(#ah-loop)"/><text x="902" y="370" class="label ink-guard halo" text-anchor="middle">retry with the evaluator&#x27;s feedback · max 2 retries</text><text x="902" y="370" class="label ink-guard" text-anchor="middle">retry with the evaluator&#x27;s feedback · max 2 retries</text><text x="200" y="540" class="small" text-anchor="start">Every hand-off is a validated Pydantic</text><text x="200" y="556" class="small" text-anchor="start">contract; a bad payload stops the run.</text><text x="720" y="538" class="small" text-anchor="start">Every run ends in exactly one state:</text><rect x="720.0" y="548" width="123.8" height="17" rx="8.5" class="pill-adk"/><text x="781.9" y="560.2" class="pilltxt ink-adk" text-anchor="middle">SUCCESS · deployed</text><rect x="851.8" y="548" width="184.8" height="17" rx="8.5" class="pill-guard"/><text x="944.1999999999999" y="560.2" class="pilltxt ink-guard" text-anchor="middle">FAILED_INPUT · blocked early</text><rect x="1044.6" y="548" width="233.6" height="17" rx="8.5" class="pill-guard"/><text x="1161.3999999999999" y="560.2" class="pilltxt ink-guard" text-anchor="middle">FAILED_EVAL_EXHAUSTED · not deployed</text><rect x="264" y="624" width="330" height="176" rx="10" class="box st-mcp"/><text x="276" y="646" class="btitle" text-anchor="start">profile_dataset</text><rect x="551.7" y="633" width="32.3" height="17" rx="8.5" class="pill-mcp"/><text x="567.85" y="645.2" class="pilltxt ink-mcp" text-anchor="middle">MCP</text><text x="276" y="666.0" class="small" text-anchor="start">Model Context Protocol tool (FastMCP)</text><text x="276" y="681.5" class="small" text-anchor="start">rows, column types, missing values,</text><text x="276" y="697.0" class="small" text-anchor="start">class balance, leakage hints, file hash</text><text x="276" y="712.5" class="small" text-anchor="start">raw rows never reach an LLM;</text><text x="276" y="728.0" class="small" text-anchor="start">result is checked against a contract</text><text x="276" y="743.5" class="small" text-anchor="start">before the agent may use it</text><path d="M494,514 V620" class="mcp-a" marker-end="url(#ah-mcp-a)"/><text x="502" y="600" class="label ink-mcp halo" text-anchor="start">MCP call</text><text x="502" y="600" class="label ink-mcp" text-anchor="start">MCP call</text><rect x="616" y="624" width="470" height="176" rx="10" class="box st-adk"/><text x="628" y="646" class="btitle" text-anchor="start">Model-Selection Agent · Google ADK</text><rect x="964.4" y="633" width="111.6" height="17" rx="8.5" class="pill-adk"/><text x="1020.1999999999999" y="645.2" class="pilltxt ink-adk" text-anchor="middle">A2A server :8080</text><text x="628" y="668.0" class="small" text-anchor="start">publishes an Agent Card at</text><text x="628" y="685.2" class="mono" text-anchor="start">/.well-known/agent-card.json</text><text x="628" y="702.4" class="small" text-anchor="start">callbacks: agent, model, tool</text><text x="628" y="719.6" class="small" text-anchor="start">LLM proposes models + settings</text><text x="628" y="736.8" class="small" text-anchor="start">inside fixed safe bounds</text><text x="628" y="754.0" class="small" text-anchor="start">scikit-learn trains each candidate:</text><text x="628" y="771.2" class="small" text-anchor="start">LogReg · Random Forest · GBM</text><text x="628" y="788.4" class="small" text-anchor="start">Linear · Ridge · Random Forest</text><circle cx="1078" cy="791" r="4.5" class="dot-llm"/><rect x="880" y="660" width="194" height="104" rx="10" class="box st-mcp"/><text x="892" y="682" class="btitle" text-anchor="start">log_experiment</text><rect x="1031.7" y="669" width="32.3" height="17" rx="8.5" class="pill-mcp"/><text x="1047.8500000000001" y="681.2" class="pilltxt ink-mcp" text-anchor="middle">MCP</text><text x="892" y="702.0" class="small" text-anchor="start">MCP tool: logs each</text><text x="892" y="717.5" class="small" text-anchor="start">candidate&#x27;s params and</text><text x="892" y="733.0" class="small" text-anchor="start">metrics to MLflow, then</text><text x="892" y="748.5" class="small" text-anchor="start">registers the winner</text><path d="M678,514 V620" class="a2a" marker-end="url(#ah-a2a)" marker-start="url(#ahs-a2a)"/><text x="686" y="600" class="label ink-adk halo" text-anchor="start">A2A · JSON-RPC SendMessage</text><text x="686" y="600" class="label ink-adk" text-anchor="start">A2A · JSON-RPC SendMessage</text><text x="686" y="614" class="label2 halo" text-anchor="start">trace context in traceparent header</text><text x="686" y="614" class="label2" text-anchor="start">trace context in traceparent header</text><rect x="1150" y="624" width="266" height="176" rx="10" class="box st-slate"/><text x="1162" y="646" class="btitle" text-anchor="start">Model serving</text><rect x="1349.3" y="633" width="56.7" height="17" rx="8.5" class="pill-slate"/><text x="1377.6499999999999" y="645.2" class="pilltxt ink-slate" text-anchor="middle">FastAPI</text><text x="1162" y="666.0" class="small" text-anchor="start">local: /api/deployments/{id}/predict</text><text x="1162" y="681.5" class="small" text-anchor="start">Docker container or Cloud Run</text><text x="1162" y="697.0" class="small" text-anchor="start">(image built from serving/)</text><text x="1162" y="712.5" class="small" text-anchor="start">enforces the serving policy</text><text x="1162" y="728.0" class="small" text-anchor="start">monitors requests, errors, p95</text><text x="1162" y="743.5" class="small" text-anchor="start">optional X-API-Key check</text><path d="M1300,514 V620" class="arr" marker-end="url(#ah-arr)"/><text x="1308" y="600" class="label halo" text-anchor="start">deploy</text><text x="1308" y="600" class="label" text-anchor="start">deploy</text><rect x="184" y="842" width="1232" height="92" rx="10" class="box st-llm"/><text x="196" y="864" class="btitle" text-anchor="start">LLM decision layer · llm_provider.py</text><text x="452" y="864" class="small" text-anchor="start">tries each source in order and records which one answered</text><rect x="1249.7" y="851" width="154.3" height="17" rx="8.5" class="pill-llm"/><text x="1326.8500000000001" y="863.2" class="pilltxt ink-llm" text-anchor="middle">dot = stage asks an LLM</text><rect x="196" y="878" width="196" height="46" rx="8" class="chainbox"/><text x="206" y="896" class="ctitle" text-anchor="start">Decision cache</text><text x="206" y="913" class="small" text-anchor="start">same inputs → saved answer</text><path d="M392,901 H410" class="arr-llm" marker-end="url(#ah-arr-llm)"/><rect x="414" y="878" width="196" height="46" rx="8" class="chainbox"/><text x="424" y="896" class="ctitle" text-anchor="start">Gemini 3.5 Flash-Lite</text><text x="424" y="913" class="small" text-anchor="start">primary · cloud</text><path d="M610,901 H628" class="arr-llm" marker-end="url(#ah-arr-llm)"/><rect x="632" y="878" width="196" height="46" rx="8" class="chainbox"/><text x="642" y="896" class="ctitle" text-anchor="start">Ollama qwen2.5-coder</text><text x="642" y="913" class="small" text-anchor="start">local · $0 per call</text><path d="M828,901 H846" class="arr-llm" marker-end="url(#ah-arr-llm)"/><rect x="850" y="878" width="196" height="46" rx="8" class="chainbox"/><text x="860" y="896" class="ctitle" text-anchor="start">OpenRouter</text><text x="860" y="913" class="small" text-anchor="start">backup · cloud</text><path d="M1046,901 H1064" class="arr-llm" marker-end="url(#ah-arr-llm)"/><rect x="1068" y="878" width="196" height="46" rx="8" class="chainbox"/><text x="1078" y="896" class="ctitle" text-anchor="start">Typed fallback</text><text x="1078" y="913" class="small" text-anchor="start">deterministic rules</text><text x="1404" y="896" class="small" text-anchor="end">usage ledger records</text><text x="1404" y="913" class="mono" text-anchor="end">source · tokens · cost</text><rect x="184" y="978" width="296" height="96" rx="10" class="box st-store"/><text x="196" y="1000" class="btitle" text-anchor="start">Run history</text><rect x="358.4" y="987" width="111.6" height="17" rx="8.5" class="pill-store"/><text x="414.2" y="999.2" class="pilltxt ink-store" text-anchor="middle">SQLite · runs.db</text><text x="196" y="1020.0" class="small" text-anchor="start">every finished run, reopened from</text><text x="196" y="1035.5" class="small" text-anchor="start">the History panel; downloads:</text><text x="196" y="1051.0" class="small" text-anchor="start">model card, result JSON, insights</text><rect x="496" y="978" width="296" height="96" rx="10" class="box st-store"/><text x="508" y="1000" class="btitle" text-anchor="start">Artifacts folder</text><rect x="707.0" y="987" width="75.0" height="17" rx="8.5" class="pill-store"/><text x="744.5" y="999.2" class="pilltxt ink-store" text-anchor="middle">artifacts/</text><text x="508" y="1020.0" class="small" text-anchor="start">train / test CSVs, model bundles</text><text x="508" y="1035.5" class="small" text-anchor="start">(model.joblib + metadata.json),</text><text x="508" y="1051.0" class="small" text-anchor="start">model cards, decision cache</text><rect x="808" y="978" width="296" height="96" rx="10" class="box st-store"/><text x="820" y="1000" class="btitle" text-anchor="start">MLflow</text><rect x="964.1" y="987" width="129.9" height="17" rx="8.5" class="pill-store"/><text x="1029.05" y="999.2" class="pilltxt ink-store" text-anchor="middle">tracking + registry</text><text x="820" y="1020.0" class="small" text-anchor="start">one run per candidate model with</text><text x="820" y="1035.5" class="small" text-anchor="start">params and metrics; the winner is</text><text x="820" y="1051.0" class="small" text-anchor="start">registered for evaluation</text><rect x="1120" y="978" width="296" height="96" rx="10" class="box st-store"/><text x="1132" y="1000" class="btitle" text-anchor="start">Langfuse</text><rect x="1312.7" y="987" width="93.3" height="17" rx="8.5" class="pill-store"/><text x="1359.3500000000001" y="999.2" class="pilltxt ink-store" text-anchor="middle">OpenTelemetry</text><text x="1132" y="1020.0" class="small" text-anchor="start">one trace per pipeline run, across</text><text x="1132" y="1035.5" class="small" text-anchor="start">Flow → A2A → ADK agent; inputs,</text><text x="1132" y="1051.0" class="small" text-anchor="start">outputs, tokens per span</text><text x="30" y="1118" class="bandnum" text-anchor="start">KEY</text><rect x="184" y="1106" width="14" height="14" rx="3" class="sw st-crew"/><text x="205" y="1118" class="small" text-anchor="start">CrewAI agents</text><rect x="319.8" y="1106" width="14" height="14" rx="3" class="sw st-adk"/><text x="340.8" y="1118" class="small" text-anchor="start">Google ADK + A2A</text><rect x="475.4" y="1106" width="14" height="14" rx="3" class="sw st-mcp"/><text x="496.4" y="1118" class="small" text-anchor="start">MCP tools</text><rect x="584.8" y="1106" width="14" height="14" rx="3" class="sw st-llm"/><text x="605.8" y="1118" class="small" text-anchor="start">LLM providers</text><rect x="720.5999999999999" y="1106" width="14" height="14" rx="3" class="sw st-guard"/><text x="741.5999999999999" y="1118" class="small" text-anchor="start">guardrails + routing</text><rect x="902.5999999999999" y="1106" width="14" height="14" rx="3" class="sw st-store"/><text x="923.5999999999999" y="1118" class="small" text-anchor="start">services + storage</text><path d="M1081.3999999999999,1113 H1117.3999999999999" class="arr" marker-end="url(#ah-arr)"/><text x="1125.3999999999999" y="1118" class="small" text-anchor="start">call / data</text><path d="M1211.3999999999999,1113 H1247.3999999999999" class="loop" marker-end="url(#ah-loop)"/><text x="1255.3999999999999" y="1118" class="small" text-anchor="start">feedback loop</text></svg>

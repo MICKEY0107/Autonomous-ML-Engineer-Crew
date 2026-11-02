@@ -3,11 +3,18 @@
 Runs only after the held-out evaluation passes. Deployment is deliberately
 deterministic (no LLM): packaging, hashing and health checks must be exact.
 
+The agent's one LLM decision is the serving policy (request limits and alert
+thresholds, ``plan_deployment``), made by a CrewAI agent inside fixed bounds
+and stored with the bundle; everything else here is deterministic.
+
 Targets (``DEPLOY_TARGET``):
 
 * ``local`` (default) - the bundle is served by the dashboard API at
   ``/api/deployments/<run>/predict``; the health check loads the bundle and
   scores one held-out row.
+* ``docker`` - the bundle plus ``serving/`` is built into a Docker image and
+  run as a container on this machine (the same image Cloud Run would run);
+  the health check calls the container's ``/health``.
 * ``cloudrun`` - the bundle plus ``serving/`` (FastAPI + Dockerfile) is
   deployed with ``gcloud run deploy --source``; the health check calls the
   live service's ``/health``. Needs the Google Cloud CLI logged in, and
@@ -23,7 +30,9 @@ import hashlib
 import json
 import os
 import shutil
+import socket
 import subprocess
+import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -230,9 +239,94 @@ def _deploy_cloudrun(state: PipelineState, directory: Path) -> DeploymentResult:
     )
 
 
+def _serving_policy(state: PipelineState, metadata: dict[str, Any], target: str) -> dict[str, Any]:
+    """Ask the Deployment and Observability Agent (CrewAI) for the serving policy."""
+
+    from orchestrator.agentic_policy import plan_deployment
+
+    evaluation = state.evaluation_result
+    metric = evaluation.primary_metric
+    policy = plan_deployment(
+        task_type=str(state.task_type),
+        model_name=str(metadata["model_name"]),
+        feature_count=len(metadata["features"]),
+        train_rows=int(state.data_prep_result.train_row_count),
+        primary_metric=metric,
+        metric_value=float(evaluation.held_out_metrics[metric]),
+        threshold=float(evaluation.acceptance_threshold),
+        deploy_target=target,
+    )
+    return policy.model_dump()
+
+
+def _free_port(start: int = 8800, stop: int = 8900) -> int:
+    for port in range(start, stop):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            if probe.connect_ex(("127.0.0.1", port)) != 0:
+                return port
+    raise DeploymentError("no free local port for the model container")
+
+
+def _deploy_docker(state: PipelineState, directory: Path) -> DeploymentResult:
+    """Build the serving image and run it as a local container (Cloud Run's image)."""
+
+    docker = shutil.which("docker")
+    if docker is None:
+        raise DeploymentError("Docker is not installed or not on PATH")
+    for name in ("app.py", "Dockerfile", "requirements.txt"):
+        shutil.copy2(SERVING_SOURCE / name, directory / name)
+    name = f"amec-{state.run_id.hex[:12]}"
+    image = f"{name}:r1"
+    subprocess.run(
+        [docker, "build", "-q", "-t", image, str(directory)],
+        check=True, capture_output=True, text=True, timeout=1_200,
+    )
+    port = _free_port()
+    env = ["-e", "MODEL_DIR=/app"]
+    if os.getenv("PREDICT_API_KEY"):
+        env += ["-e", f"PREDICT_API_KEY={os.environ['PREDICT_API_KEY']}"]
+    subprocess.run([docker, "rm", "-f", name], capture_output=True, text=True, timeout=60)
+    container = subprocess.run(
+        [docker, "run", "-d", "--name", name, "--label", "amec=model",
+         "--memory", "1g", "-p", f"127.0.0.1:{port}:8080", *env, image],
+        check=True, capture_output=True, text=True, timeout=120,
+    ).stdout.strip()
+    image_id = subprocess.run(
+        [docker, "image", "inspect", "--format", "{{.Id}}", image],
+        check=True, capture_output=True, text=True, timeout=60,
+    ).stdout.strip()
+    url = f"http://127.0.0.1:{port}"
+    health = HealthStatus.UNHEALTHY
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(f"{url}/health", timeout=5) as response:  # noqa: S310
+                if response.status == 200:
+                    health = HealthStatus.HEALTHY
+                    break
+        except Exception:
+            time.sleep(1)
+    digest = image_id if image_id.startswith("sha256:") and len(image_id) == 71 else _digest(
+        [directory / "model.joblib"]
+    )
+    return DeploymentResult(
+        run_id=state.run_id,
+        image_digest=digest,
+        service_url=url,
+        health_status=health,
+        deployment_revision=f"docker-{container[:12]}",
+        deployed_at=datetime.now(timezone.utc),
+    )
+
+
 def deploy_model(state: PipelineState, *, tracking_uri: str) -> DeploymentResult:
     directory, metadata, sample = _package(state, tracking_uri)
     target = os.getenv("DEPLOY_TARGET", "local").strip().casefold()
+    metadata["serving_policy"] = _serving_policy(state, metadata, target)
+    metadata["deploy_target"] = target
+    (directory / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     if target == "cloudrun":
         return _deploy_cloudrun(state, directory)
+    if target == "docker":
+        return _deploy_docker(state, directory)
     return _deploy_local(state, directory, metadata, sample)

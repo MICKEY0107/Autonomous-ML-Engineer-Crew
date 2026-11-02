@@ -10,6 +10,9 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import threading
+import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +26,18 @@ MODEL_DIR = Path(os.getenv("MODEL_DIR", Path(__file__).resolve().parent))
 MODEL = joblib.load(MODEL_DIR / "model.joblib")
 METADATA = json.loads((MODEL_DIR / "metadata.json").read_text(encoding="utf-8"))
 FEATURES = [item["name"] for item in METADATA["features"]]
+
+POLICY = {
+    "max_rows_per_request": 500,
+    "rate_limit_per_minute": 120,
+    "latency_alert_ms": 500,
+    "error_rate_alert_pct": 5.0,
+    **(METADATA.get("serving_policy") or {}),
+}
+_LOCK = threading.Lock()
+_STATS: dict[str, Any] = {"requests": 0, "rows": 0, "errors": 0, "rejected": 0, "last_error": None}
+_LATENCIES: deque[float] = deque(maxlen=500)
+_RECENT: deque[float] = deque()
 
 app = FastAPI(title=f"Model {METADATA['run_id']}", version="1.0.0")
 
@@ -84,5 +99,49 @@ def predict(request: PredictRequest, x_api_key: str | None = Header(default=None
     expected = os.getenv("PREDICT_API_KEY")
     if expected and not (x_api_key and secrets.compare_digest(x_api_key.encode("utf-8"), expected.encode("utf-8"))):
         raise HTTPException(status_code=401, detail="missing or invalid X-API-Key")
-    results = _predict(request.rows)
+    now = time.monotonic()
+    with _LOCK:
+        while _RECENT and now - _RECENT[0] > 60:
+            _RECENT.popleft()
+        if len(request.rows) > int(POLICY["max_rows_per_request"]):
+            _STATS["rejected"] += 1
+            raise HTTPException(status_code=413, detail="too many rows for the serving policy")
+        if len(_RECENT) >= int(POLICY["rate_limit_per_minute"]):
+            _STATS["rejected"] += 1
+            raise HTTPException(status_code=429, detail="rate limit reached (serving policy)")
+        _RECENT.append(now)
+    started = time.perf_counter()
+    try:
+        results = _predict(request.rows)
+    except Exception as exc:
+        with _LOCK:
+            _STATS["requests"] += 1
+            _STATS["errors"] += 1
+            _STATS["last_error"] = type(exc).__name__
+            _LATENCIES.append((time.perf_counter() - started) * 1000)
+        raise HTTPException(status_code=422, detail=f"prediction failed: {type(exc).__name__}") from exc
+    with _LOCK:
+        _STATS["requests"] += 1
+        _STATS["rows"] += len(request.rows)
+        _LATENCIES.append((time.perf_counter() - started) * 1000)
     return {"predictions": [item["prediction"] for item in results], "results": results}
+
+
+@app.get("/metrics")
+def metrics(x_api_key: str | None = Header(default=None)) -> dict[str, Any]:
+    """Usage and error monitoring for this container, checked against the policy."""
+
+    expected = os.getenv("PREDICT_API_KEY")
+    if expected and not (x_api_key and secrets.compare_digest(x_api_key.encode("utf-8"), expected.encode("utf-8"))):
+        raise HTTPException(status_code=401, detail="missing or invalid X-API-Key")
+    with _LOCK:
+        latencies = sorted(_LATENCIES)
+        stats = dict(_STATS)
+    p95 = round(latencies[min(len(latencies) - 1, round(0.95 * (len(latencies) - 1)))], 2) if latencies else None
+    error_rate = round(100 * stats["errors"] / stats["requests"], 2) if stats["requests"] else 0.0
+    alerts = []
+    if stats["requests"] >= 5 and p95 is not None and p95 > POLICY["latency_alert_ms"]:
+        alerts.append("p95 latency above the policy alert")
+    if stats["requests"] >= 5 and error_rate > float(POLICY["error_rate_alert_pct"]):
+        alerts.append("error rate above the policy alert")
+    return {**stats, "error_rate_pct": error_rate, "latency_p95_ms": p95, "alerts": alerts, "policy": POLICY}

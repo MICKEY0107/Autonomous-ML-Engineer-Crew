@@ -29,7 +29,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, Sp
 from agents.deployment import bundle_dir, load_bundle, predict_rows
 from contracts.models import PipelineState, PipelineStatus
 from main import GuardrailViolation, validate_prediction_goal
-from orchestrator import a2a_client, run_store
+from orchestrator import a2a_client, run_store, serving_monitor
 from orchestrator.insights import build_run_insights
 from orchestrator.provider_status import provider_status
 from main import _pipeline_result, _start_a2a_server, create_pipeline_state, infer_task_type
@@ -79,6 +79,24 @@ SPAN_STAGE_NAMES = {
     "agent.deployment": "Deployment Agent",
     "pipeline.run": "Terminal Result",
 }
+
+
+def _deployment_reasoning(run_hex: str) -> str:
+    """The Deployment and Observability Agent's serving policy, in words."""
+
+    try:
+        metadata = json.loads((bundle_dir(run_hex) / "metadata.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    policy = metadata.get("serving_policy") or {}
+    if not policy:
+        return ""
+    return (
+        f"Serving policy ({policy.get('source', 'llm')}): up to {policy['max_rows_per_request']} rows "
+        f"per request, {policy['rate_limit_per_minute']} requests per minute; alert above "
+        f"{policy['latency_alert_ms']} ms p95 latency or {policy['error_rate_alert_pct']}% errors. "
+        f"{policy.get('reasoning', '')}"
+    ).strip()
 
 
 def _forced_fail_threshold(task_type: Any) -> float:
@@ -877,12 +895,20 @@ def _run_job(
             if state.evaluation_result
             else "",
             "summary": result.llm_summary,
+            "deployment": _deployment_reasoning(state.run_id.hex) if deployment else "",
         }
         if _stage("Retry Controller")["status"] == "pending":
             _set_stage(
                 "Retry Controller",
                 "success",
                 detail="No retry required" if state.retry_count == 0 else f"{state.retry_count}/2 retries completed",
+            )
+        if state.status == PipelineStatus.FAILED_EVAL_EXHAUSTED:
+            # The loop itself worked, but the run ends because no retry met the bar.
+            _set_stage(
+                "Retry Controller",
+                "failed",
+                detail=f"{state.retry_count}/{state.retry_count} retries used; quality bar not met",
             )
         _set_stage(
             "Terminal Result",
@@ -1238,15 +1264,65 @@ def _bundle(run_hex: str) -> tuple[Any, dict[str, Any]]:
 
 
 @app.get("/api/deployments/{run_hex}")
-def deployment_info(run_hex: str) -> dict[str, Any]:
+def deployment_info(run_hex: str, x_api_key: str | None = Header(default=None)) -> dict[str, Any]:
+    """Model schema, ranges and serving policy (behind the API key when one is set)."""
+
+    _check_api_key(x_api_key)
     _, metadata = _bundle(run_hex)
     return {"status": "ok", "auth_required": bool(os.getenv("PREDICT_API_KEY")), **metadata}
 
 
 @app.get("/api/deployments/{run_hex}/health")
 def deployment_health(run_hex: str) -> dict[str, Any]:
+    """Public liveness check: no schema or data ranges are exposed here."""
+
     _, metadata = _bundle(run_hex)
-    return {"status": "ok", "run_id": metadata["run_id"], "model": metadata["model_name"]}
+    return {
+        "status": "ok",
+        "run_id": metadata["run_id"],
+        "model": metadata["model_name"],
+        "auth_required": bool(os.getenv("PREDICT_API_KEY")),
+    }
+
+
+@app.get("/api/deployments/{run_hex}/metrics")
+def deployment_metrics(run_hex: str, x_api_key: str | None = Header(default=None)) -> dict[str, Any]:
+    """Live usage and error monitoring for this deployment, with policy alerts."""
+
+    _check_api_key(x_api_key)
+    _, metadata = _bundle(run_hex)
+    return serving_monitor.snapshot(
+        run_hex, serving_monitor.policy_of(metadata), bundle_dir(run_hex)
+    )
+
+
+def _score(run_hex: str, rows: list[dict[str, Any]]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Enforce the serving policy, score the rows and record the call."""
+
+    model, metadata = _bundle(run_hex)
+    folder = bundle_dir(run_hex)
+    refusal = serving_monitor.check_limits(
+        run_hex, serving_monitor.policy_of(metadata), len(rows), folder
+    )
+    if refusal is not None:
+        status = 429 if refusal.startswith("rate limit") else 413
+        raise HTTPException(status_code=status, detail=refusal)
+    started = time.perf_counter()
+    try:
+        predictions = predict_rows(model, metadata, rows)
+    except Exception as exc:
+        serving_monitor.record(
+            run_hex,
+            rows=len(rows),
+            latency_ms=(time.perf_counter() - started) * 1_000,
+            error=f"{type(exc).__name__}: {str(exc)[:200]}",
+            folder=folder,
+        )
+        raise HTTPException(status_code=422, detail=f"prediction failed: {type(exc).__name__}") from exc
+    serving_monitor.record(
+        run_hex, rows=len(rows), latency_ms=(time.perf_counter() - started) * 1_000, folder=folder
+    )
+    return metadata, predictions
 
 
 @app.post("/api/deployments/{run_hex}/predict")
@@ -1256,14 +1332,12 @@ def deployment_predict(
     x_api_key: str | None = Header(default=None),
 ) -> dict[str, Any]:
     _check_api_key(x_api_key)
-    model, metadata = _bundle(run_hex)
     rows = body.get("rows")
     if not isinstance(rows, list) or not rows or len(rows) > 1_000:
         raise HTTPException(status_code=422, detail="rows must be a list of 1-1000 objects")
-    try:
-        predictions = predict_rows(model, metadata, rows)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"prediction failed: {type(exc).__name__}") from exc
+    if not all(isinstance(row, dict) for row in rows):
+        raise HTTPException(status_code=422, detail="each row must be an object of feature values")
+    metadata, predictions = _score(run_hex, rows)
     return {"target": metadata["target_column"], "predictions": predictions}
 
 
@@ -1278,15 +1352,25 @@ async def deployment_predict_csv(
     import pandas as pd
 
     _check_api_key(x_api_key)
-    model, metadata = _bundle(run_hex)
+    _, metadata = _bundle(run_hex)
     raw = await csv_file.read(MAX_UPLOAD_BYTES + 1)
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="CSV must be smaller than 100 MB")
+    # Category columns are read as text so codes like "1" are not turned into 1.0.
+    text_columns = {
+        item["name"]: str for item in metadata["features"] if item["type"] == "category"
+    }
     try:
-        frame = pd.read_csv(io.BytesIO(raw))
-        predictions = predict_rows(model, metadata, frame.to_dict(orient="records"))
+        frame = pd.read_csv(io.BytesIO(raw), dtype=text_columns)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"prediction failed: {type(exc).__name__}") from exc
+        raise HTTPException(status_code=422, detail=f"could not read CSV: {type(exc).__name__}") from exc
+    if frame.empty:
+        raise HTTPException(status_code=422, detail="CSV has no rows")
+    records = [
+        {key: (None if pd.isna(value) else value) for key, value in row.items()}
+        for row in frame.to_dict(orient="records")
+    ]
+    _, predictions = _score(run_hex, records)
     frame[f"predicted_{metadata['target_column']}"] = [p["prediction"] for p in predictions]
     return Response(
         frame.to_csv(index=False),

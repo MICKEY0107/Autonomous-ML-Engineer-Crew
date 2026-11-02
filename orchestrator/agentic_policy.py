@@ -132,6 +132,19 @@ class ModelChoice(BaseModel):
     source: DecisionSource = "llm"
 
 
+class ServingPolicy(BaseModel):
+    """Bounded serving and monitoring settings for a deployed model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_rows_per_request: int = Field(ge=1, le=1_000)
+    rate_limit_per_minute: int = Field(ge=10, le=600)
+    latency_alert_ms: int = Field(ge=50, le=5_000)
+    error_rate_alert_pct: float = Field(ge=0.5, le=20)
+    reasoning: str = Field(min_length=1, max_length=2_000)
+    source: DecisionSource = "llm"
+
+
 class CandidatePlan(BaseModel):
     """One allowlisted estimator and its bounded, executable parameters."""
 
@@ -707,6 +720,120 @@ def choose_model(
                 stage="model_choice",
                 agent="Model Selection Agent (ADK)",
                 framework="adk",
+                source="fallback",
+            )
+            update_span_io(
+                span,
+                output={
+                    **fallback.model_dump(),
+                    "fallback_used": True,
+                    "error_type": type(exc).__name__,
+                },
+            )
+            return fallback
+
+
+def plan_deployment(
+    *,
+    task_type: str,
+    model_name: str,
+    feature_count: int,
+    train_rows: int,
+    primary_metric: str,
+    metric_value: float,
+    threshold: float,
+    deploy_target: str,
+) -> ServingPolicy:
+    """Deployment and Observability Agent decision: how the model is served and watched.
+
+    The CrewAI agent chooses request limits and alert thresholds inside fixed
+    bounds; deterministic code packages the model and enforces the policy.
+    """
+
+    fallback = ServingPolicy(
+        max_rows_per_request=500,
+        rate_limit_per_minute=120,
+        latency_alert_ms=500,
+        error_rate_alert_pct=5.0,
+        reasoning=(
+            "Used the safe serving policy: up to 500 rows per request, 120 "
+            "requests per minute, alert above 500 ms p95 latency or 5% errors."
+        ),
+        source="fallback",
+    )
+    safe_input = {
+        "task_type": task_type,
+        "model_name": model_name,
+        "feature_count": feature_count,
+        "train_rows": train_rows,
+        "primary_metric": primary_metric,
+        "held_out_metric": round(float(metric_value), 6),
+        "threshold": round(float(threshold), 6),
+        "deploy_target": deploy_target,
+    }
+    prompt = (
+        "Act as the deployment and observability decision agent for a model that "
+        "just passed held-out evaluation. Choose how it is served and monitored. "
+        "Return ONE JSON object only, shaped exactly like "
+        '{"max_rows_per_request": 500, "rate_limit_per_minute": 120, '
+        '"latency_alert_ms": 500, "error_rate_alert_pct": 5.0, "reasoning": "<why>"}. '
+        "Bounds: max_rows_per_request 1..1000, rate_limit_per_minute 10..600, "
+        "latency_alert_ms 50..5000, error_rate_alert_pct 0.5..20. Heavier models "
+        "(random forest, gradient boosting) and more features need smaller batches "
+        "and a looser latency alert. Use only this row-free metadata: "
+        f"{json.dumps(safe_input, sort_keys=True)}"
+    )
+    with traced_span(
+        "llm.decision.deployment_plan",
+        kind=SpanKind.CLIENT,
+        attributes={"ml.reasoning.row_safe": True},
+    ) as span:
+        update_span_io(span, input=safe_input)
+        try:
+            if _offline():
+                raise RuntimeError("LLM_MODE is not live")
+            from orchestrator.crew_agents import run_crew_decision
+
+            cached = _from_cache(
+                "deployment_plan",
+                safe_input,
+                ServingPolicy,
+                "Deployment and Observability Engineer",
+                "crewai",
+            )
+            if cached is not None:
+                update_span_io(span, output={**cached.model_dump(), "fallback_used": False})
+                return cached
+            policy, source = run_crew_decision(
+                stage="deployment_plan",
+                role="Deployment and Observability Engineer",
+                goal=(
+                    "Serve the accepted model safely and decide when its live "
+                    "behaviour should raise an alert."
+                ),
+                backstory=(
+                    "You run production ML services. You size request limits to the "
+                    "model's cost and set alert thresholds that catch real problems "
+                    "without constant false alarms. You never see raw data rows."
+                ),
+                task_description=prompt,
+                expected_output=(
+                    "A ServingPolicy JSON object: max_rows_per_request, "
+                    "rate_limit_per_minute, latency_alert_ms, error_rate_alert_pct, reasoning."
+                ),
+                output_model=ServingPolicy,
+            )
+            policy = policy.model_copy(update={"source": source})
+            _to_cache("deployment_plan", safe_input, policy)
+            update_span_io(span, output={**policy.model_dump(), "fallback_used": False})
+            return policy
+        except Exception as exc:
+            from orchestrator import usage
+
+            usage.record(
+                stage="deployment_plan",
+                agent="Deployment and Observability Engineer",
+                framework="crewai",
                 source="fallback",
             )
             update_span_io(

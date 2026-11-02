@@ -126,7 +126,10 @@ def test_api_predict_endpoints_and_api_key(regression_bundle, monkeypatch) -> No
         headers={"X-API-Key": "clé".encode("latin-1")},
     )
     assert weird.status_code == 401
-    assert client.get("/api/deployments/notarun").status_code == 404
+    # With a key configured, schema/metadata needs it too; health stays public.
+    assert client.get(f"/api/deployments/{regression_bundle}").status_code == 401
+    assert client.get(f"/api/deployments/{regression_bundle}/health").json()["auth_required"] is True
+    assert client.get("/api/deployments/notarun", headers={"X-API-Key": "secret-test-key"}).status_code == 404
 
 
 def test_guardrail_check_endpoint() -> None:
@@ -193,3 +196,85 @@ def test_insights_for_classification_and_regression() -> None:
     )
     assert any("right" in note for note in notes)
     assert any("sent the model back 1" in note for note in notes)
+
+
+def _set_policy(run_hex: str, **policy) -> None:
+    path = deployment.bundle_dir(run_hex) / "metadata.json"
+    metadata = json.loads(path.read_text(encoding="utf-8"))
+    metadata["serving_policy"] = {
+        "max_rows_per_request": 500,
+        "rate_limit_per_minute": 120,
+        "latency_alert_ms": 500,
+        "error_rate_alert_pct": 5.0,
+        "reasoning": "test policy",
+        "source": "llm",
+        **policy,
+    }
+    path.write_text(json.dumps(metadata), encoding="utf-8")
+
+
+def test_predict_calls_are_monitored(regression_bundle) -> None:
+    import orchestrator_api
+
+    client = TestClient(orchestrator_api.app)
+    info = client.get(f"/api/deployments/{regression_bundle}").json()
+    example = {item["name"]: item["example"] for item in info["features"]}
+    for _ in range(3):
+        assert client.post(f"/api/deployments/{regression_bundle}/predict", json={"rows": [example, example]}).status_code == 200
+    metrics = client.get(f"/api/deployments/{regression_bundle}/metrics").json()
+    assert metrics["requests"] == 3 and metrics["rows_scored"] == 6 and metrics["errors"] == 0
+    assert metrics["latency_p95_ms"] is not None and metrics["status"] == "ok"
+    # Counters are mirrored next to the bundle so they survive a restart.
+    assert (deployment.bundle_dir(regression_bundle) / "monitoring.json").is_file()
+
+
+def test_serving_policy_limits_are_enforced(regression_bundle) -> None:
+    import orchestrator_api
+
+    _set_policy(regression_bundle, max_rows_per_request=1, rate_limit_per_minute=10)
+    client = TestClient(orchestrator_api.app)
+    info = client.get(f"/api/deployments/{regression_bundle}").json()
+    assert info["serving_policy"]["max_rows_per_request"] == 1
+    example = {item["name"]: item["example"] for item in info["features"]}
+    url = f"/api/deployments/{regression_bundle}/predict"
+    assert client.post(url, json={"rows": [example, example]}).status_code == 413
+    statuses = [client.post(url, json={"rows": [example]}).status_code for _ in range(11)]
+    assert statuses[:10] == [200] * 10 and statuses[10] == 429
+    metrics = client.get(f"/api/deployments/{regression_bundle}/metrics").json()
+    assert metrics["rejected_by_policy"] == 2
+
+
+def test_error_rate_alert_fires(regression_bundle, monkeypatch) -> None:
+    import orchestrator_api
+
+    _set_policy(regression_bundle, error_rate_alert_pct=1.0)
+
+    def broken(*_args, **_kwargs):
+        raise ValueError("model exploded")
+
+    monkeypatch.setattr(orchestrator_api, "predict_rows", broken)
+    client = TestClient(orchestrator_api.app)
+    url = f"/api/deployments/{regression_bundle}/predict"
+    for _ in range(5):
+        assert client.post(url, json={"rows": [{"living_area_sqft": 1000}]}).status_code == 422
+    metrics = client.get(f"/api/deployments/{regression_bundle}/metrics").json()
+    assert metrics["errors"] == 5 and metrics["error_rate_pct"] == 100.0
+    assert metrics["status"] == "alert" and any("error rate" in alert for alert in metrics["alerts"])
+    assert "model exploded" in metrics["last_error"]
+
+
+def test_deployment_agent_policy_is_bounded_and_falls_back_offline() -> None:
+    from pydantic import ValidationError
+
+    from orchestrator.agentic_policy import ServingPolicy, plan_deployment
+
+    policy = plan_deployment(
+        task_type="regression", model_name="ridge", feature_count=9, train_rows=400,
+        primary_metric="rmse", metric_value=18000.0, threshold=53000.0, deploy_target="local",
+    )
+    assert policy.source == "fallback" and policy.max_rows_per_request == 500
+    with pytest.raises(ValidationError):
+        ServingPolicy(
+            max_rows_per_request=5000, rate_limit_per_minute=120,
+            latency_alert_ms=500, error_rate_alert_pct=5, reasoning="too big",
+        )

@@ -603,7 +603,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--force-fail-eval",
         action="store_true",
-        help="Set the evaluation threshold to 0.99 to demonstrate retries",
+        help="Use an unreachable quality bar (F1 0.99 / RMSE 0) to demonstrate the retry loop",
     )
     return parser
 

@@ -125,6 +125,7 @@ export const STAGE_LABELS: Record<string, string> = {
   model_search_plan: "Model search plan",
   model_choice: "Model choice",
   evaluation_reflection: "Evaluation reflection",
+  deployment_plan: "Serving & monitoring policy",
   pipeline_summary: "Run summary",
   evaluation: "Evaluation narrative",
 };

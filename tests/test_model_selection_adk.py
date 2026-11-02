@@ -179,3 +179,54 @@ def test_adk_callbacks_validate_task_and_record_duration(tmp_path) -> None:
     )
     assert before_agent_callback(context(request.model_dump_json())) is None
     assert after_agent_callback(context("")) is None
+
+
+def test_model_and_tool_callbacks_fire_for_every_decision_and_mcp_call(
+    tmp_path,
+    tracking_uri,
+) -> None:
+    from agents import model_selection_adk as adk
+
+    frame = pd.DataFrame(
+        {
+            "amount": [float(index) for index in range(40)],
+            "region": ["north", "south", "east", "west"] * 10,
+            "target": [index % 2 for index in range(40)],
+        }
+    )
+    run_id = UUID("10000000-0000-4000-8000-000000000009")
+    request = ModelSelectionRequest(
+        data_prep_result=_data_prep_result(tmp_path, frame, run_id),
+        task_type="classification",
+        tracking_uri=tracking_uri,
+        experiment_name="callback-events",
+    )
+    adk.CALLBACK_EVENTS.clear()
+    select_models(request, artifact_dir=tmp_path / "models")
+    events = [event for event in adk.CALLBACK_EVENTS if event.get("run_id") == str(run_id)]
+    names = [event["event"] for event in events]
+
+    decisions = {event["decision"] for event in events if event["event"] == "after_model"}
+    assert decisions == {"model_search_plan", "model_choice"}
+    assert names.count("before_model") == names.count("after_model") == 2
+    actions = {event["action"] for event in events if event["event"] == "after_tool"}
+    assert actions == {"create_run", "log_params", "log_metrics", "query_best_run", "register_model"}
+    assert names.count("before_tool") == names.count("after_tool")
+
+
+def test_callbacks_block_rows_unknown_actions_and_bad_metrics() -> None:
+    from agents import model_selection_adk as adk
+
+    with pytest.raises(adk.CallbackViolation):
+        adk.before_model_callback("r", "model_choice", {"rows": [{"amount": 1}]})
+    with pytest.raises(adk.CallbackViolation):
+        adk.before_model_callback("r", "model_choice", {"sample": pd.DataFrame({"a": [1]})})
+    with pytest.raises(adk.CallbackViolation):
+        adk.before_tool_callback("r", "log_and_query_experiment", "delete_experiment", {})
+    with pytest.raises(adk.CallbackViolation):
+        adk.before_tool_callback(
+            "r", "log_and_query_experiment", "log_metrics", {"metrics": {"rmse": float("nan")}}
+        )
+    with pytest.raises(adk.CallbackViolation):
+        adk.after_tool_callback("r", "log_and_query_experiment", "create_run", object(), 0.0)
+    assert any(event["event"] == "before_tool.blocked" for event in adk.CALLBACK_EVENTS)

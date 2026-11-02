@@ -144,6 +144,7 @@ export default function AgentsTab({ payload }: { payload: ResultPayload }) {
             {narratives?.data_prep && <div><div className="mb-1 font-semibold text-orange-300">Data Preparation Engineer (CrewAI)</div><p className="whitespace-pre-line">{narratives.data_prep}</p></div>}
             {narratives?.model_selection && <div><div className="mb-1 font-semibold text-sky-300">Model Selection Agent (ADK)</div><p className="whitespace-pre-line">{narratives.model_selection}</p></div>}
             {narratives?.evaluation && <div><div className="mb-1 font-semibold text-orange-300">Model Evaluation Engineer (CrewAI)</div><p className="whitespace-pre-line">{narratives.evaluation}</p></div>}
+            {narratives?.deployment && <div><div className="mb-1 font-semibold text-orange-300">Deployment and Observability Engineer (CrewAI)</div><p className="whitespace-pre-line">{narratives.deployment}</p></div>}
             {!narratives && <EmptyHint>No reasoning recorded.</EmptyHint>}
           </div>
         </Card>

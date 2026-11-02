@@ -58,9 +58,15 @@ Key capabilities:
   findings, feature importance, data profile (class balance, correlations,
   missing values, per-class profiles), model comparison per attempt, predicted
   vs actual / residuals or confusion matrix / per-class scores / ROC.
-- Deploys the accepted model: a prediction form, CSV batch scoring and a
-  `/predict` endpoint (optional `X-API-Key`); `serving/` deploys the same
-  bundle to Google Cloud Run with `DEPLOY_TARGET=cloudrun`.
+- Deploys the accepted model through the **Deployment and Observability Agent**
+  (CrewAI): the agent chooses a bounded serving policy (rows per request,
+  requests per minute, latency and error-rate alert thresholds); code packages
+  the model with a SHA-256 digest, health-checks it and serves a prediction
+  form, CSV batch scoring and a `/predict` endpoint (optional `X-API-Key`).
+  Every call is monitored (requests, errors, p50/p95 latency, alerts).
+  `DEPLOY_TARGET=local` (default) serves it from the API, `docker` runs the
+  `serving/` image as a local container, `cloudrun` deploys that image to
+  Google Cloud Run.
 - Shows provenance of every decision (primary LLM, local Ollama, cache, default
   rules), the A2A Agent Card and exchanges, live provider health and saved run
   history (SQLite), with model-card and JSON downloads.
@@ -499,7 +505,9 @@ project-scoped Langfuse trace when credentials are configured.
 | `GET` | `/api/runs` · `/api/runs/{run_id}` | Saved run history (SQLite). |
 | `GET` | `/api/runs/{run_id}/download/{model-card.md,result.json,insights.json}` | Downloads. |
 | `GET` | `/api/samples` · `/api/samples/{name}` | Bundled sample datasets. |
-| `GET` | `/api/deployments/{run}` · `/health` | Deployed model schema and health. |
+| `GET` | `/api/deployments/{run}` | Deployed model schema and serving policy (needs `X-API-Key` when set). |
+| `GET` | `/api/deployments/{run}/health` | Public liveness check. |
+| `GET` | `/api/deployments/{run}/metrics` | Live monitoring: requests, errors, p50/p95 latency, policy alerts. |
 | `POST` | `/api/deployments/{run}/predict` | `{"rows": [...]}` → predictions (+ class probabilities). |
 | `POST` | `/api/deployments/{run}/predict_csv` | Upload a CSV, get it back with predictions. |
 | `GET` | `/docs` | FastAPI interactive API documentation. |

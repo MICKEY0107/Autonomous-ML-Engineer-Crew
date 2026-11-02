@@ -19,6 +19,7 @@ import math
 import os
 import re
 import time
+from collections import deque
 from collections.abc import AsyncGenerator, Coroutine
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -352,6 +353,111 @@ def _evaluate_candidate(
     return metrics
 
 
+# --- ADK model + tool callbacks ------------------------------------------------
+# The agent's two LLM decisions (search plan, final choice) and every MCP tool
+# call pass through before/after hooks. Before-hooks validate and can block
+# (fail closed); after-hooks validate the result and record a correlated event.
+_ALLOWED_TOOL_ACTIONS = frozenset(
+    {"create_run", "log_params", "log_metrics", "query_best_run", "register_model"}
+)
+_ROW_KEYS = frozenset({"rows", "records", "data", "dataframe", "raw_rows", "sample_rows"})
+CALLBACK_EVENTS: deque[dict[str, Any]] = deque(maxlen=200)
+_PIPELINE_RUN_ID: contextvars.ContextVar[str] = contextvars.ContextVar("pipeline_run_id", default="")
+
+
+class CallbackViolation(ModelSelectionError):
+    """A model or tool callback blocked the call."""
+
+
+def _callback_event(name: str, fields: dict[str, Any]) -> None:
+    event = {"event": name, "at": time.time(), **fields}
+    CALLBACK_EVENTS.append(event)
+    _adk_logger.info("%s %s", name, fields)
+    add_trace_event(f"adk.{name}", fields)
+
+
+def _has_row_payload(value: Any) -> bool:
+    if isinstance(value, (pd.DataFrame, pd.Series)):
+        return True
+    if isinstance(value, dict):
+        return any(
+            str(key).casefold() in _ROW_KEYS or _has_row_payload(item)
+            for key, item in value.items()
+        )
+    if isinstance(value, (list, tuple)):
+        return any(_has_row_payload(item) for item in value)
+    return False
+
+
+def before_model_callback(run_id: str, decision: str, context: dict[str, Any]) -> float:
+    """Runs before an LLM decision: only row-free metadata may reach the model."""
+
+    if _has_row_payload(context):
+        _callback_event("before_model.blocked", {"run_id": run_id, "decision": decision})
+        raise CallbackViolation(f"{decision}: raw data rows may not be sent to the LLM")
+    _callback_event(
+        "before_model",
+        {"run_id": run_id, "decision": decision, "context_keys": sorted(context)},
+    )
+    return time.perf_counter()
+
+
+def after_model_callback(run_id: str, decision: str, result: Any, started: float) -> Any:
+    """Runs after an LLM decision: record who decided and how long it took."""
+
+    _callback_event(
+        "after_model",
+        {
+            "run_id": run_id,
+            "decision": decision,
+            "source": getattr(result, "source", "unknown"),
+            "duration_ms": int((time.perf_counter() - started) * 1000),
+        },
+    )
+    return result
+
+
+def before_tool_callback(run_id: str, tool: str, action: str, arguments: dict[str, Any]) -> float:
+    """Runs before an MCP tool call: allowlisted actions, finite metrics, no rows."""
+
+    reason = None
+    if tool != "log_and_query_experiment" or action not in _ALLOWED_TOOL_ACTIONS:
+        reason = f"tool action {tool}.{action} is not allowlisted"
+    elif _has_row_payload(arguments):
+        reason = "tool arguments may not contain data rows"
+    else:
+        for value in (arguments.get("metrics") or {}).values():
+            if not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+                reason = "tool metrics must be finite numbers"
+                break
+    if reason:
+        _callback_event("before_tool.blocked", {"run_id": run_id, "tool": tool, "action": action, "reason": reason})
+        raise CallbackViolation(reason)
+    _callback_event("before_tool", {"run_id": run_id, "tool": tool, "action": action})
+    return time.perf_counter()
+
+
+def after_tool_callback(
+    run_id: str, tool: str, action: str, result: ExperimentResult, started: float
+) -> ExperimentResult:
+    """Runs after an MCP tool call: the reply must be a validated ExperimentResult."""
+
+    if not isinstance(result, ExperimentResult) or not result.run_id:
+        _callback_event("after_tool.invalid", {"run_id": run_id, "tool": tool, "action": action})
+        raise CallbackViolation(f"{tool}.{action} returned an invalid result")
+    _callback_event(
+        "after_tool",
+        {
+            "run_id": run_id,
+            "tool": tool,
+            "action": action,
+            "mlflow_run_id": result.run_id,
+            "duration_ms": int((time.perf_counter() - started) * 1000),
+        },
+    )
+    return result
+
+
 def _train_candidates(request: ModelSelectionRequest) -> tuple[
     list[_CandidateOutcome],
     pd.DataFrame,
@@ -359,14 +465,19 @@ def _train_candidates(request: ModelSelectionRequest) -> tuple[
     str,
 ]:
     features, target = _load_training_frame(request.data_prep_result)
-    search_plan = plan_model_search(
-        task_type=request.task_type.value,
-        row_count=len(features),
-        feature_count=len(features.columns),
-        prediction_goal=request.prediction_goal,
-        retry_attempt=request.retry_attempt,
-        retry_feedback=request.retry_feedback,
-        dataset_hash=request.data_prep_result.dataset_hash,
+    run_id = str(request.data_prep_result.run_id)
+    plan_context = {
+        "task_type": request.task_type.value,
+        "row_count": len(features),
+        "feature_count": len(features.columns),
+        "prediction_goal": request.prediction_goal,
+        "retry_attempt": request.retry_attempt,
+        "retry_feedback": request.retry_feedback,
+        "dataset_hash": request.data_prep_result.dataset_hash,
+    }
+    started = before_model_callback(run_id, "model_search_plan", plan_context)
+    search_plan = after_model_callback(
+        run_id, "model_search_plan", plan_model_search(**plan_context), started
     )
     train_features, validation_features, train_target, validation_target = (
         _split_training_data(features, target, request)
@@ -461,11 +572,19 @@ async def _experiment_call(
                 "params": arguments.get("params", {}),
             },
         )
+        callback_run_id = _PIPELINE_RUN_ID.get()
+        started = before_tool_callback(callback_run_id, "log_and_query_experiment", action, arguments)
         response = await session.call_tool(
             "log_and_query_experiment",
             {"action": action, "tracking_uri": tracking_uri, **arguments},
         )
-        result = _structured_result(response)
+        result = after_tool_callback(
+            callback_run_id,
+            "log_and_query_experiment",
+            action,
+            _structured_result(response),
+            started,
+        )
         set_current_span_attributes(
             {
                 "mcp.result.validated": True,
@@ -492,6 +611,8 @@ async def log_and_query_experiment(
     search_reasoning: str,
 ) -> ModelSelectionResult:
     """Log all candidates through MCP, query the winner, and register it."""
+
+    _PIPELINE_RUN_ID.set(str(request.data_prep_result.run_id))
 
     experiment_name = f"{request.experiment_name}-{request.data_prep_result.run_id.hex}"
     primary_metric = (
@@ -569,13 +690,18 @@ async def log_and_query_experiment(
             for outcome in outcomes
         ]
         eligible_names = _eligible_model_names(candidates_info, maximize=maximize)
-        choice = choose_model(
-            candidates=candidates_info,
-            task_type=request.task_type.value,
-            primary_metric=primary_metric,
-            maximize=maximize,
-            prediction_goal=request.prediction_goal,
-            retry_feedback=request.retry_feedback,
+        choice_context = {
+            "candidates": candidates_info,
+            "task_type": request.task_type.value,
+            "primary_metric": primary_metric,
+            "maximize": maximize,
+            "prediction_goal": request.prediction_goal,
+            "retry_feedback": request.retry_feedback,
+        }
+        run_id = str(request.data_prep_result.run_id)
+        started = before_model_callback(run_id, "model_choice", choice_context)
+        choice = after_model_callback(
+            run_id, "model_choice", choose_model(**choice_context), started
         )
         selected_run_id = run_id_by_name.get(choice.selected_model_name)
         if selected_run_id is None:

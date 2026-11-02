@@ -238,29 +238,53 @@ def test_mlflow_mcp_span_is_child_and_redacts_arguments() -> None:
                 isError=False,
             )
 
+    from agents.model_selection_adk import CallbackViolation
+
+    called = []
+
+    class CountingSession(FakeSession):
+        async def call_tool(self, name: str, arguments: dict[str, object]) -> object:
+            called.append(name)
+            return await super().call_tool(name, arguments)
+
+    # Row data in tool arguments: the before-tool callback blocks the call, and
+    # the span that recorded the attempt still never contains the rows.
     with pipeline_trace(RUN_ID):
         with traced_span("agent.model_selection"):
+            with pytest.raises(CallbackViolation):
+                asyncio.run(
+                    _experiment_call(
+                        CountingSession(),
+                        "sqlite:///tmp/trace.db",
+                        "create_run",
+                        experiment_name="trace-test",
+                        params={"model": "rf"},
+                        raw_rows=[{"secret": "must-not-appear"}],
+                    )
+                )
+            # A clean call goes through and is traced as a child span.
             asyncio.run(
                 _experiment_call(
-                    FakeSession(),
+                    CountingSession(),
                     "sqlite:///tmp/trace.db",
                     "create_run",
                     experiment_name="trace-test",
                     params={"model": "rf"},
-                    raw_rows=[{"secret": "must-not-appear"}],
                 )
             )
 
-    spans = {span.name: span for span in _EXPORTER.get_finished_spans()}
-    mcp_span = spans["mcp.log_and_query_experiment"]
-    assert mcp_span.parent.span_id == spans["agent.model_selection"].context.span_id
-    assert "must-not-appear" not in mcp_span.attributes["mcp.arguments"]
-    assert REDACTED in mcp_span.attributes["mcp.arguments"]
-    assert json.loads(mcp_span.attributes["langfuse.observation.input"]) == {
+    assert called == ["log_and_query_experiment"]
+    spans = [span for span in _EXPORTER.get_finished_spans() if span.name == "mcp.log_and_query_experiment"]
+    parent = next(span for span in _EXPORTER.get_finished_spans() if span.name == "agent.model_selection")
+    blocked, clean = spans[-2], spans[-1]
+    assert blocked.parent.span_id == parent.context.span_id
+    assert "must-not-appear" not in blocked.attributes["mcp.arguments"]
+    assert REDACTED in blocked.attributes["mcp.arguments"]
+    assert json.loads(clean.attributes["langfuse.observation.input"]) == {
         "experiment_name": "trace-test",
         "params": {"model": "rf"},
     }
-    assert json.loads(mcp_span.attributes["langfuse.observation.output"]) == {
+    assert json.loads(clean.attributes["langfuse.observation.output"]) == {
         "best_metric": None,
         "run_id": "mlflow-run-1",
     }

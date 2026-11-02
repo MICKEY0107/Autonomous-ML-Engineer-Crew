@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, Rocket, Server, Sparkles, Upload } from "lucide-react";
-import { apiErrorMessage, getDeployment, predictCsv, predictRows } from "../../api";
-import type { DeploymentMetadata, FinalResult, Prediction } from "../../types";
+import { Activity, Download, KeyRound, Rocket, Server, ShieldCheck, Sparkles, Upload } from "lucide-react";
+import { apiErrorMessage, getDeployment, getDeploymentHealth, getDeploymentMetrics, predictCsv, predictRows } from "../../api";
+import type { DeploymentMetadata, FinalResult, MonitoringSnapshot, Prediction } from "../../types";
 import { Card, EmptyHint, Stat, fmt, prettyName } from "./shared";
 
 export default function PredictTab({ final }: { final: FinalResult }) {
@@ -12,21 +12,55 @@ export default function PredictTab({ final }: { final: FinalResult }) {
   const [result, setResult] = useState<Prediction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [authRequired, setAuthRequired] = useState(false);
+  const [monitor, setMonitor] = useState<MonitoringSnapshot | null>(null);
+
+  const loadMeta = async (key?: string) => {
+    setError(null);
+    try {
+      const data = await getDeployment(runHex, key);
+      setMeta(data);
+      setValues(Object.fromEntries(data.features.map((feature) => [feature.name, String(feature.example ?? "")])));
+    } catch (requestError) {
+      setError(apiErrorMessage(requestError));
+    }
+  };
+
+  const loadMonitor = async (key?: string) => {
+    try {
+      setMonitor(await getDeploymentMetrics(runHex, key));
+    } catch {
+      /* monitoring is optional: the panel simply stays empty */
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
     setMeta(null);
     setResult(null);
+    setMonitor(null);
     if (!final.deployment) return undefined;
-    getDeployment(runHex)
-      .then((data) => {
+    // The public health check says whether the schema needs an API key.
+    getDeploymentHealth(runHex)
+      .then((health) => {
         if (cancelled) return;
-        setMeta(data);
-        setValues(Object.fromEntries(data.features.map((feature) => [feature.name, String(feature.example ?? "")])));
+        setAuthRequired(health.auth_required);
+        if (!health.auth_required) {
+          void loadMeta();
+          void loadMonitor();
+        }
       })
       .catch((requestError) => !cancelled && setError(apiErrorMessage(requestError)));
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [final.deployment, runHex]);
+
+  useEffect(() => {
+    if (!meta) return undefined;
+    const timer = window.setInterval(() => void loadMonitor(apiKey || undefined), 15_000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta, apiKey]);
 
   const row = useMemo(() => {
     if (!meta) return {};
@@ -57,6 +91,7 @@ export default function PredictTab({ final }: { final: FinalResult }) {
       setError(apiErrorMessage(requestError));
     } finally {
       setBusy(false);
+      void loadMonitor(apiKey || undefined);
     }
   };
 
@@ -76,6 +111,7 @@ export default function PredictTab({ final }: { final: FinalResult }) {
       setError(apiErrorMessage(requestError));
     } finally {
       setBusy(false);
+      void loadMonitor(apiKey || undefined);
     }
   };
 
@@ -94,6 +130,49 @@ Content-Type: application/json${meta?.auth_required ? "\nX-API-Key: <your key>" 
 
 {"rows": [${JSON.stringify(row)}]}`}</pre>
       </Card>
+      {authRequired && !meta && (
+        <Card title="API key required" subtitle="This deployment is protected; the key unlocks its input schema and monitoring" action={<KeyRound size={16} className="text-amber-300" />}>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs text-slate-400">
+              API key
+              <input className="field-input text-sm" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} />
+            </label>
+            <button type="button" className="run-button w-auto px-4" disabled={!apiKey} onClick={() => { void loadMeta(apiKey); void loadMonitor(apiKey); }}>Unlock</button>
+          </div>
+          {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
+        </Card>
+      )}
+      {meta?.serving_policy && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Card title="Serving policy" subtitle="Chosen by the Deployment and Observability Agent (CrewAI), within fixed bounds" action={<ShieldCheck size={16} className="text-emerald-300" />}>
+            <div className="grid grid-cols-2 gap-2">
+              <Stat label="Rows per request" value={`≤ ${meta.serving_policy.max_rows_per_request}`} />
+              <Stat label="Requests / minute" value={`≤ ${meta.serving_policy.rate_limit_per_minute}`} />
+              <Stat label="Latency alert" value={`p95 > ${meta.serving_policy.latency_alert_ms} ms`} tone="amber" />
+              <Stat label="Error alert" value={`> ${meta.serving_policy.error_rate_alert_pct}%`} tone="amber" />
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-slate-400">{meta.serving_policy.reasoning} <span className="text-slate-500">· decided by {meta.serving_policy.source}</span></p>
+          </Card>
+          <Card title="Live monitoring" subtitle="Every call to this deployment's /predict, refreshed every 15 s" action={<Activity size={16} className={monitor?.status === "alert" ? "text-rose-300" : "text-emerald-300"} />}>
+            {monitor ? (
+              <>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  <Stat label="Requests" value={monitor.requests} hint={`${monitor.rows_scored} rows scored`} tone="cyan" />
+                  <Stat label="Errors" value={monitor.errors} hint={`${monitor.error_rate_pct}% error rate`} tone={monitor.errors ? "rose" : "slate"} />
+                  <Stat label="Blocked by policy" value={monitor.rejected_by_policy} />
+                  <Stat label="Latency p50" value={monitor.latency_p50_ms != null ? `${fmt(monitor.latency_p50_ms)} ms` : "—"} />
+                  <Stat label="Latency p95" value={monitor.latency_p95_ms != null ? `${fmt(monitor.latency_p95_ms)} ms` : "—"} />
+                  <Stat label="Status" value={monitor.status === "alert" ? "Alert" : "OK"} tone={monitor.status === "alert" ? "rose" : "emerald"} />
+                </div>
+                {monitor.alerts.length > 0 && (
+                  <ul className="mt-3 space-y-1 text-xs text-rose-300">{monitor.alerts.map((alert) => <li key={alert}>⚠ {alert}</li>)}</ul>
+                )}
+                {monitor.last_error && <p className="mt-2 text-xs text-slate-500">Last error: {monitor.last_error}</p>}
+              </>
+            ) : <EmptyHint>No calls recorded yet. Make a prediction to see live numbers.</EmptyHint>}
+          </Card>
+        </div>
+      )}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Card title="Try a prediction" subtitle="Pre-filled with typical values from the training data" action={<Sparkles size={16} className="text-amber-300" />}>
           {!meta ? <EmptyHint>Loading the model's input schema…</EmptyHint> : (
