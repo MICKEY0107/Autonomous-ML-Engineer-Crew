@@ -3,14 +3,11 @@
 Provider chain (tried in order, each only once - no retry storms):
 
 1. Primary:   ``LLM_PROVIDER`` + ``CREWAI_MODEL`` (e.g. gemini/gemini-3.5-flash-lite)
-2. Fallbacks: ``LLM_FALLBACK_CHAIN`` - comma-separated model strings such as
-              ``ollama/qwen2.5-coder:latest,openrouter/google/gemini-3.5-flash-lite``.
-              When unset, the other cloud provider is derived as before.
+2. Fallbacks: ``LLM_FALLBACK_CHAIN`` - optional comma-separated model strings.
+              When unset, the secondary cloud provider is derived as before.
 3. If every provider fails, callers use their typed deterministic policy.
 
-The provider is read from the model prefix: ``gemini/``, ``openrouter/`` or
-``ollama/`` (a local model served by Ollama - no API cost, data stays on the
-machine).
+The provider is read from the model prefix: ``gemini/`` or ``openrouter/``.
 """
 
 from __future__ import annotations
@@ -26,14 +23,14 @@ if TYPE_CHECKING:
 
 load_dotenv()
 
-LOCAL_PROVIDERS = frozenset({"ollama"})
+LOCAL_PROVIDERS = frozenset()
 
 
 def provider_of(model: str, default: str = "") -> str:
     """Provider name from a model string's prefix."""
 
     prefix = model.split("/", 1)[0].lower() if "/" in model else ""
-    return prefix if prefix in {"gemini", "openrouter", "ollama"} else default.lower()
+    return prefix if prefix in {"gemini", "openrouter"} else default.lower()
 
 
 def _build_llm(provider: str, model: str) -> "LLM":
@@ -76,23 +73,11 @@ def _build_llm(provider: str, model: str) -> "LLM":
             max_tokens=max_tokens,
             max_retries=0,
         )
-    if provider == "ollama":
-        host = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-        return LLM(
-            model=model,
-            base_url=f"{host}/v1",
-            api_key=os.getenv("OLLAMA_API_KEY", "ollama"),
-            temperature=0.1,
-            # Local models load into memory on first use; allow for that.
-            timeout=int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "180")),
-            max_tokens=max_tokens,
-            max_retries=0,
-        )
     raise ValueError(f"Unsupported LLM provider: {provider}")
 
 
 def build_llm_for(model: str) -> "LLM":
-    """Build an LLM from a prefixed model string (gemini/, openrouter/, ollama/)."""
+    """Build an LLM from a prefixed model string (gemini/, openrouter/)."""
 
     provider = provider_of(model)
     if not provider:
@@ -154,10 +139,9 @@ def extra_fallback_llms() -> list["LLM"]:
 
 
 def narrative_llm() -> "LLM | None":
-    """Optional cheaper model for narrative-only text (the run summary).
+    """Optional dedicated model for narrative-only text (the run summary).
 
-    ``LLM_NARRATIVE_MODEL=ollama/qwen2.5-coder:latest`` keeps the summary
-    LLM-written but local and free; decisions keep using the primary chain.
+    If unset, summaries use the primary Gemini model.
     """
 
     model = os.getenv("LLM_NARRATIVE_MODEL", "").strip()

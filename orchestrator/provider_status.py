@@ -1,7 +1,6 @@
 """Health of each configured LLM provider, without spending generation quota.
 
 * Gemini     - fetch the configured model's metadata (no tokens generated).
-* Ollama     - list local models and check the configured one is pulled.
 * OpenRouter - read the key's remaining credit from ``/api/v1/key``.
 
 Results are cached for 60 seconds so the dashboard can poll cheaply.
@@ -58,19 +57,6 @@ def _check_gemini(model: str) -> dict[str, Any]:
         return {"ok": False, "detail": type(exc).__name__}
 
 
-def _check_ollama(model: str) -> dict[str, Any]:
-    host = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-    name = model.split("/", 1)[-1]
-    try:
-        tags = _http_json(f"{host}/api/tags", timeout=3)
-    except Exception as exc:
-        return {"ok": False, "detail": f"Ollama not running ({type(exc).__name__})"}
-    names = {item.get("name") for item in tags.get("models", [])}
-    if name in names or f"{name}:latest" in names:
-        return {"ok": True, "detail": "running locally · $0 per call"}
-    return {"ok": False, "detail": f"model not pulled (ollama pull {name})"}
-
-
 def _check_openrouter(_model: str) -> dict[str, Any]:
     key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPEN_ROUTER_API_KEY")
     if not key:
@@ -90,7 +76,7 @@ def _check_openrouter(_model: str) -> dict[str, Any]:
     return {"ok": True, "detail": detail, "credit_usd": remaining}
 
 
-_CHECKS = {"gemini": _check_gemini, "ollama": _check_ollama, "openrouter": _check_openrouter}
+_CHECKS = {"gemini": _check_gemini, "openrouter": _check_openrouter}
 
 
 def provider_status(force: bool = False) -> dict[str, Any]:

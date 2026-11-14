@@ -27,9 +27,9 @@ Terminal state correct in 7/7 runs overall.
 
 ## Monthly cost scenario (LLM tokens)
 
-Measured mean per successful run: 0 input + 0 output tokens. Cloud price used: $0.15/1M input, $1.25/1M output (Gemini Flash-Lite class). Local Ollama calls and cache hits cost $0.
+Measured mean per successful run: 0 input + 0 output tokens. Cloud price used: $0.15/1M input, $1.25/1M output (Gemini Flash-Lite class). Deterministic fallbacks and cache hits cost $0.
 
-| Runs per month | As measured (current mix of cloud / local / cache) | If every call went to the cloud model |
+| Runs per month | As measured (current mix of cloud / cache) | If every call went to the cloud model |
 | --- | --- | --- |
 | 100 | $0.00 | $0.00 |
 | 1,000 | $0.00 | $0.00 |

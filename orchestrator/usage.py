@@ -51,7 +51,7 @@ def _price(name: str) -> float:
         return 0.0
 
 
-LOCAL_PROVIDERS = frozenset({"ollama"})
+LOCAL_PROVIDERS = frozenset()
 
 
 def _provider_price(provider: str, direction: str) -> float:
@@ -64,7 +64,7 @@ def _provider_price(provider: str, direction: str) -> float:
 
 
 def estimate_cost(prompt_tokens: int, completion_tokens: int, provider: str = "") -> float:
-    """Local models (Ollama) cost nothing per token; cloud uses configured prices."""
+    """Calculates token cost using provider or fallback pricing."""
 
     if provider.lower() in LOCAL_PROVIDERS:
         return 0.0

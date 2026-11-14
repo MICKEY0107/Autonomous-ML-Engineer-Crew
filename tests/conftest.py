@@ -15,7 +15,7 @@ import pytest
 os.environ["LLM_MODE"] = "offline"
 # Tests must not reuse each other's decisions; cache tests opt back in.
 os.environ["LLM_CACHE"] = "off"
-# A developer's .env fallback chain (e.g. a local Ollama) must not leak into tests.
+# A developer's .env fallback chain must not leak into tests.
 os.environ["LLM_FALLBACK_CHAIN"] = ""
 os.environ["LLM_NARRATIVE_MODEL"] = ""
 # Flow tests use mocked stages; deployment is covered by tests/test_deployment.py.

@@ -36,7 +36,7 @@ GuardrailFn = Callable[[Any], tuple[bool, Any]]
 
 
 def _provider_chain() -> list[tuple[str, Any]]:
-    """Primary, then every configured fallback (cloud or local Ollama)."""
+    """Primary, then every configured fallback."""
 
     from orchestrator.llm_provider import (
         crewai_llm,

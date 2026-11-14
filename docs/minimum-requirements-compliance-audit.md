@@ -29,7 +29,7 @@ user's Google Cloud project for the final public deployment. Run the tests with
 - **Cloud Run** needs a Google Cloud project with billing, the `gcloud` CLI, and four Secret Manager values
   (Gemini key, Langfuse public key, Langfuse secret key and Langfuse project ID). The complete production image
   has passed a local container health and dashboard smoke test; public deployment and cloud-only evaluation remain.
-- The LLM decisions use Gemini first, then a local Ollama model, then OpenRouter, then a typed rule-based
+- The LLM decisions use Gemini as the primary agent model with structured JSON outputs, caching, and a typed rule-based
   fallback. Every decision is labelled with its real source, so a fallback is never presented as an LLM answer.
 - Only the Model-Selection agent is behind A2A; the other agents run inside the CrewAI orchestrator. This is
   the CrewAI ↔ ADK interoperability boundary the synopsis defines.

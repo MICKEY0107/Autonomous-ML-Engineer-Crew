@@ -107,27 +107,25 @@ def test_chain_falls_through_every_provider_once(monkeypatch) -> None:
     assert third.calls == 1
 
 
-def test_local_models_cost_nothing_and_cloud_prices_apply(monkeypatch) -> None:
+def test_cloud_prices_apply(monkeypatch) -> None:
     monkeypatch.setenv("LLM_INPUT_COST_PER_1M", "1.0")
     monkeypatch.setenv("LLM_OUTPUT_COST_PER_1M", "2.0")
     monkeypatch.setenv("OPENROUTER_INPUT_COST_PER_1M", "3.0")
-    assert usage.estimate_cost(1_000_000, 1_000_000, "ollama") == 0.0
     assert usage.estimate_cost(1_000_000, 1_000_000, "gemini") == 3.0
     assert usage.estimate_cost(1_000_000, 0, "openrouter") == 3.0
 
 
 def test_provider_prefixes_and_chain_parsing(monkeypatch) -> None:
-    assert provider_of("ollama/qwen2.5-coder:latest") == "ollama"
     assert provider_of("gemini/gemini-3.5-flash-lite") == "gemini"
     assert provider_of("openrouter/google/x") == "openrouter"
     monkeypatch.setenv(
-        "LLM_FALLBACK_CHAIN", " ollama/qwen2.5-coder:latest , openrouter/google/x ,"
+        "LLM_FALLBACK_CHAIN", " gemini/gemini-2.0-flash , openrouter/google/x ,"
     )
-    assert _chain_models() == ["ollama/qwen2.5-coder:latest", "openrouter/google/x"]
+    assert _chain_models() == ["gemini/gemini-2.0-flash", "openrouter/google/x"]
 
 
 def test_small_model_format_slips_are_repaired_then_bounds_checked(monkeypatch) -> None:
-    """Real replies from a local qwen2.5-coder model, which used to fall back."""
+    """Format slips in model JSON output are repaired and checked."""
 
     from orchestrator.agentic_policy import plan_model_search
 

@@ -55,8 +55,8 @@ def _call_reasoner(
             from orchestrator import llm_provider
 
             def candidates():
-                # Narrative text may use a cheaper/local model first
-                # (LLM_NARRATIVE_MODEL, e.g. ollama/...), then the normal chain.
+                # Narrative text may use a dedicated model first
+                # (LLM_NARRATIVE_MODEL), then the normal chain.
                 yield "narrative_llm", llm_provider.narrative_llm
                 yield "llm", crewai_llm
                 yield "secondary_llm", fallback_crewai_llm

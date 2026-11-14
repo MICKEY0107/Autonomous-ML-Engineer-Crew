@@ -3,7 +3,7 @@ import { Database, RefreshCw } from "lucide-react";
 import { getProviders } from "../api";
 import type { ProvidersResponse } from "../types";
 
-const NAMES: Record<string, string> = { gemini: "Gemini", ollama: "Ollama (local)", openrouter: "OpenRouter" };
+const NAMES: Record<string, string> = { gemini: "Gemini", openrouter: "OpenRouter" };
 
 export default function ProviderBar() {
   const [state, setState] = useState<ProvidersResponse | null>(null);

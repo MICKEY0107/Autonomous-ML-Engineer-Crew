@@ -92,9 +92,8 @@ export default function AgentsTab({ payload }: { payload: ResultPayload }) {
   const narratives = payload.llm_insights;
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
         <Stat label="LLM calls" value={usage.llm_requests ?? 0} tone="cyan" />
-        <Stat label="Local (Ollama)" value={usage.local_llm_requests ?? 0} tone="emerald" hint="$0 per call" />
         <Stat label="Cache hits" value={usage.cache_hits ?? 0} tone="amber" hint="reused decisions" />
         <Stat label="Default rules used" value={usage.fallback_decisions ?? 0} tone={(usage.fallback_decisions ?? 0) ? "rose" : "slate"} />
         <Stat label="Tokens" value={(usage.total_tokens ?? 0).toLocaleString()} hint={`${usage.input_tokens ?? 0} in / ${usage.output_tokens ?? 0} out`} />

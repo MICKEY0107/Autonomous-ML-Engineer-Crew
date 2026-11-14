@@ -93,18 +93,15 @@ export function Stat({ label, value, hint, tone = "slate" }: {
 }
 
 const SOURCE_STYLES: Record<string, { label: string; className: string }> = {
-  llm: { label: "Primary LLM", className: "border-cyan-500/30 bg-cyan-500/10 text-cyan-300" },
+  llm: { label: "Gemini LLM", className: "border-cyan-500/30 bg-cyan-500/10 text-cyan-300" },
   secondary_llm: { label: "Fallback LLM", className: "border-violet-500/30 bg-violet-500/10 text-violet-300" },
-  narrative_llm: { label: "Local LLM", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" },
+  narrative_llm: { label: "Narrative LLM", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" },
   cache: { label: "Cache", className: "border-amber-500/30 bg-amber-500/10 text-amber-300" },
   fallback: { label: "Default rules", className: "border-slate-600 bg-slate-800/60 text-slate-300" },
 };
 
-export function SourceBadge({ source, provider }: { source: string; provider?: string }) {
-  const local = provider?.toLowerCase() === "ollama";
-  const style = local && source !== "cache" && source !== "fallback"
-    ? { label: "Local LLM (Ollama)", className: SOURCE_STYLES.narrative_llm.className }
-    : SOURCE_STYLES[source] ?? SOURCE_STYLES.fallback;
+export function SourceBadge({ source }: { source: string; provider?: string }) {
+  const style = SOURCE_STYLES[source] ?? SOURCE_STYLES.fallback;
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${style.className}`}>
       {style.label}

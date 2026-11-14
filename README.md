@@ -90,7 +90,7 @@ Key capabilities:
   `DEPLOY_TARGET=local` (default) serves it from the API, `docker` runs the
   `serving/` image as a local container, `cloudrun` deploys that image to
   Google Cloud Run.
-- Shows provenance of every decision (primary LLM, local Ollama, cache, default
+- Shows provenance of every decision (Gemini LLM, cache, default
   rules), the A2A Agent Card and exchanges, live provider health and saved run
   history (SQLite), with model-card and JSON downloads.
 - Fails closed on invalid CSVs, prompt-injection-like or toxic goals, malformed
@@ -138,21 +138,17 @@ for real decisions or `LLM_MODE=offline` for repeatable local tests.
 | 10 | Performance, cost, runtime | `orchestrator/usage.py` ledger → `PipelineResult.usage_report`, CLI `[USAGE]` line, dashboard cost card; held-out metrics per run |
 | 11 | Cloud deployment | `agents/deployment.py`, `serving/`, the root `Dockerfile`, and `scripts/deploy_gcp.ps1` support local, Docker, and Google Cloud Run targets |
 
-## Efficiency: provider chain, local LLM and decision cache
+## Efficiency: Gemini provider, decision cache, and deterministic fallbacks
 
-Every LLM decision is kept; efficiency comes from *where* and *how often* it runs.
+Every LLM decision is kept; efficiency comes from *how* it runs and caching:
 
 | Mechanism | What it does | Config |
 |---|---|---|
-| Provider chain | Primary cloud model, then each fallback once, then the typed policy. No repeated retries against an overloaded or out-of-quota model. | `LLM_PROVIDER`, `CREWAI_MODEL`, `LLM_FALLBACK_CHAIN` |
-| Local LLM (Ollama) | `ollama/<model>` runs on your machine: no API cost, no quota, data never leaves the machine. Used as a fallback, or as primary with `LLM_PROVIDER=ollama`. | `ollama/qwen2.5-coder:latest` |
-| Narrative routing | The run summary (narration, not a decision) goes to the local model first. | `LLM_NARRATIVE_MODEL` |
-| Decision cache | An identical question (same row-free inputs, same model) reuses the validated answer from `artifacts/llm_cache/`. Hits are labelled `cache` in spans, CLI and the usage report. | `LLM_CACHE=on|off` |
-| Format repair | Smaller models' format slips (a bare list, numbers as strings) are normalised before validation; every bound is still enforced. | always on |
-| Per-provider cost | Local calls cost $0; cloud prices per provider. The usage report shows calls, local calls, cache hits and fallbacks. | `LLM_*_COST_PER_1M`, `<PROVIDER>_*_COST_PER_1M` |
-
-Typical runs (house prices, 500 rows): all five decisions on local Ollama in
-about 43–64 s at $0.00; with the cache warm about 38 s; with LLMs offline about 5 s.
+| Primary Gemini LLM | Gemini models (`gemini-3.5-flash-lite`, etc.) power all reasoning across CrewAI and Google ADK. | `LLM_PROVIDER=gemini`, `CREWAI_MODEL` |
+| Fallback & Safety Chain | If cloud LLM calls time out or encounter API quota errors, the pipeline falls back safely to typed deterministic policies without breaking. | `LLM_FALLBACK_CHAIN`, `LLM_MODE` |
+| Decision cache | An identical question (same row-free inputs, same model) reuses the validated answer from `artifacts/llm_cache/`. Hits are labelled `cache` in spans, CLI and the usage report. | `LLM_CACHE=on\|off` |
+| Format repair | Output format slips (bare JSON, markdown wraps) are normalised before validation; every bound is strictly enforced. | always on |
+| Cost ledger | Cloud token usage and costs are tracked per decision and displayed on the dashboard. | `LLM_*_COST_PER_1M`, `<PROVIDER>_*_COST_PER_1M` |
 Run `scripts\llm_diag.py` to see which providers answer.
 
 ## Technology stack

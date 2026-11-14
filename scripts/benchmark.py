@@ -213,9 +213,9 @@ def main() -> None:
         "",
         f"Measured mean per successful run: {mean_in:,.0f} input + {mean_out:,.0f} output tokens. "
         f"Cloud price used: ${in_price}/1M input, ${out_price}/1M output (Gemini Flash-Lite class). "
-        "Local Ollama calls and cache hits cost $0.",
+        "Deterministic fallbacks and cache hits cost $0.",
         "",
-        "| Runs per month | As measured (current mix of cloud / local / cache) | If every call went to the cloud model |",
+        "| Runs per month | As measured (current mix of cloud / cache) | If every call went to the cloud model |",
         "| --- | --- | --- |",
     ]
     for volume in (100, 1_000, 10_000):

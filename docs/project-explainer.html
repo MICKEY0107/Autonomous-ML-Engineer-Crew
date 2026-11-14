@@ -866,7 +866,7 @@ app = to_a2a(root_agent, host=A2A_HOST, port=A2A_PORT)  # Serves /.well-known/ag
     <details>
       <summary>3. Privacy Guardrail: Zero Raw Rows to LLMs</summary>
       <div class="details-body">
-        <p>Under no circumstance are raw dataset rows provided in prompt context to Gemini or Ollama. Only statistical aggregates (null counts, column names, shapes, and metrics) are shared.</p>
+        <p>Under no circumstance are raw dataset rows provided in prompt context to Gemini or other LLMs. Only statistical aggregates (null counts, column names, shapes, and metrics) are shared.</p>
         <pre><code># agents/model_selection_adk.py
 def before_model_callback(run_id, decision, context):
     if _has_row_payload(context):
