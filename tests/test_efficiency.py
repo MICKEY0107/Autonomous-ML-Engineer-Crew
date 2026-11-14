@@ -94,7 +94,7 @@ def test_chain_falls_through_every_provider_once(monkeypatch) -> None:
     third = _FakeLlm(
         {
             "selected_model_name": "logistic_regression",
-            "reasoning": "Local model answered.",
+            "reasoning": "Fallback model answered.",
             "tradeoffs": [],
             "confidence": 0.6,
         }

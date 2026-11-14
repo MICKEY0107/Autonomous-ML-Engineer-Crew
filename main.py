@@ -528,8 +528,7 @@ def main(argv: list[str] | None = None) -> int:
     report = result.usage_report
     print(
         f"[USAGE]       runtime {result.runtime_seconds:.1f}s | "
-        f"{report.get('llm_requests', 0)} LLM calls "
-        f"({report.get('local_llm_requests', 0)} local), "
+        f"{report.get('llm_requests', 0)} LLM calls, "
         f"{report.get('cache_hits', 0)} cache hits, "
         f"{report.get('llm_latency_seconds', 0):.1f}s in LLMs | "
         f"tokens in/out {result.input_tokens}/{result.output_tokens} | "

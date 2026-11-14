@@ -183,7 +183,7 @@ class AutonomousMLEngineerFlow(Flow[PipelineState]):
     artifact_dir: str = str(DEFAULT_ARTIFACT_DIR)
     evaluation_threshold: float | None = None
     # The ADK agent makes two LLM decisions, each of which may walk the whole
-    # provider chain (a local model can take minutes), so allow enough time.
+    # provider chain and LLM reasoning, so allow enough time.
     request_timeout_seconds: float = Field(
         default_factory=lambda: float(os.getenv("A2A_TIMEOUT_SECONDS", "360")), gt=0
     )

@@ -47,7 +47,7 @@ export default function ResultSummary({ payload }: { payload: ResultPayload }) {
           <Kpi label={prettyName(final.metric_name)} value={fmt(final.metric_value)} hint={`target ${fmt(final.threshold)}`} />
           <Kpi label="Attempts" value={String((final.retry_count ?? 0) + 1)} hint={`${final.retry_count} retries`} />
           <Kpi label="Runtime" value={`${(final.runtime_ms / 1000).toFixed(1)}s`} />
-          <Kpi label="LLM calls" value={String(usage.llm_requests ?? 0)} hint={`${usage.local_llm_requests ?? 0} local · ${usage.cache_hits ?? 0} cached`} />
+          <Kpi label="LLM calls" value={String(usage.llm_requests ?? 0)} hint={`${usage.cache_hits ?? 0} cached`} />
           <Kpi label="Tokens" value={(final.token_count ?? 0).toLocaleString()} />
           <Kpi label="LLM cost" value={`$${(final.estimated_cost_usd ?? 0).toFixed(5)}`} hint={final.deployment ? <span className="inline-flex items-center gap-1"><Rocket size={11} /> {final.deployment.health_status}</span> : undefined} />
         </div>
