@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BarChart3,
+  BookOpen,
   Bot,
   BrainCircuit,
   Circle,
   Database,
+  FileCheck,
   GitBranch,
   History,
   LayoutDashboard,
@@ -238,6 +240,26 @@ export default function Dashboard() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ProviderBar />
+            <a
+              href="/reports/eval_results_report.html"
+              target="_blank"
+              rel="noreferrer"
+              className="action-link w-auto text-xs text-cyan-300 hover:text-cyan-200"
+              title="View ADK Evaluation Report (Tests, Assertions, Tool Calls)"
+            >
+              <FileCheck size={13} />
+              <span>Eval Report</span>
+            </a>
+            <a
+              href="/project-guide"
+              target="_blank"
+              rel="noreferrer"
+              className="action-link w-auto text-xs text-slate-300 hover:text-slate-100"
+              title="View Architecture & Concepts Guide"
+            >
+              <BookOpen size={13} />
+              <span>Guide</span>
+            </a>
             <button type="button" className="action-link w-auto text-xs" onClick={() => setHistoryOpen(true)}><History size={13} /> History</button>
             <span className={`status-chip ${status.tone}`}><Circle size={7} fill="currentColor" /> {status.label}</span>
           </div>
