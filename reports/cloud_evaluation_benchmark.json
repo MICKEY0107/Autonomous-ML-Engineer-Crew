@@ -1,0 +1,39 @@
+{
+  "timestamp": "2026-11-10T16:27:08.248822+00:00",
+  "cloud_url": "https://challenges-intake-last-bold.trycloudflare.com",
+  "health_check": {
+    "status": "ok",
+    "run_id": "11aba268-04f0-4096-abc0-65a7ca06668d",
+    "model": "logistic_regression"
+  },
+  "feature_count": 4,
+  "target_column": "Species",
+  "total_calls": 20,
+  "successful_calls": 20,
+  "success_rate_pct": 100.0,
+  "latency_min_ms": 53.65,
+  "latency_p50_ms": 118.24,
+  "latency_p90_ms": 158.93,
+  "latency_p95_ms": 164.68,
+  "latency_max_ms": 190.01,
+  "batch_test_rows": 10,
+  "batch_latency_ms": 192.73,
+  "server_side_metrics": {
+    "requests": 21,
+    "rows": 30,
+    "errors": 0,
+    "rejected": 0,
+    "last_error": null,
+    "error_rate_pct": 0.0,
+    "latency_p95_ms": 8.6,
+    "alerts": [],
+    "policy": {
+      "max_rows_per_request": 500,
+      "rate_limit_per_minute": 200,
+      "latency_alert_ms": 500,
+      "error_rate_alert_pct": 2.0,
+      "reasoning": "The logistic regression model has a very low feature count of 4 and is extremely lightweight. Therefore, it can handle moderate batch sizes and strict rate limits without risking memory issues. A latency alert of 500ms provides plenty of headroom, and an error rate alert of 2.0 percent catches anomalous service behavior early.",
+      "source": "cache"
+    }
+  }
+}

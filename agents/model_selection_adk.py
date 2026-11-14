@@ -79,6 +79,7 @@ from orchestrator.agentic_policy import (
     choose_model,
     plan_model_search,
 )
+from orchestrator.input_guardrails import GuardrailViolation, validate_prediction_goal
 
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
@@ -898,6 +899,18 @@ def before_agent_callback(callback_context: Any) -> types.Content | None:
     except ModelSelectionError as exc:
         _adk_logger.warning("rejected A2A task %s: %s", invocation, exc)
         add_trace_event("adk.before_agent.rejected", {"invocation_id": invocation, "error": str(exc)})
+        return types.Content(
+            role="model",
+            parts=[types.Part.from_text(text=json.dumps({"error": f"rejected: {exc}"}))],
+        )
+    try:
+        validate_prediction_goal(request.prediction_goal)
+    except GuardrailViolation as exc:
+        _adk_logger.warning("rejected A2A task %s: %s", invocation, exc)
+        add_trace_event(
+            "adk.before_agent.rejected",
+            {"invocation_id": invocation, "error": str(exc)},
+        )
         return types.Content(
             role="model",
             parts=[types.Part.from_text(text=json.dumps({"error": f"rejected: {exc}"}))],

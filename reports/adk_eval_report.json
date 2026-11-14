@@ -1,0 +1,109 @@
+{
+  "eval_set": "model_selection_adk_evalset",
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "cases": [
+    {
+      "case_id": "classification_success",
+      "status": "PASS",
+      "elapsed_ms": 2957,
+      "checks": {
+        "is_ModelSelectionResult": true,
+        "run_id_matches": true,
+        "has_3_candidates": true,
+        "best_in_candidates": true,
+        "model_type_valid": true,
+        "has_f1_weighted": true,
+        "has_accuracy": true,
+        "model_uri_prefix": true,
+        "retry_attempt_zero": true
+      },
+      "error": null,
+      "evidence": {}
+    },
+    {
+      "case_id": "regression_success",
+      "status": "PASS",
+      "elapsed_ms": 604,
+      "checks": {
+        "is_ModelSelectionResult": true,
+        "has_3_candidates": true,
+        "model_type_valid": true,
+        "has_rmse": true,
+        "has_mae": true,
+        "model_uri_prefix": true
+      },
+      "error": null,
+      "evidence": {}
+    },
+    {
+      "case_id": "retry_with_feedback",
+      "status": "PASS",
+      "elapsed_ms": 623,
+      "checks": {
+        "is_ModelSelectionResult": true,
+        "retry_attempt_is_1": true,
+        "has_rmse": true,
+        "has_3_candidates": true
+      },
+      "error": null,
+      "evidence": {}
+    },
+    {
+      "case_id": "bad_input_rejected",
+      "status": "PASS",
+      "elapsed_ms": 0,
+      "checks": {
+        "error_raised": true,
+        "error_mentions_valid": true
+      },
+      "error": null,
+      "evidence": {
+        "error_message": "A2A task message must contain valid ModelSelectionRequest JSON"
+      }
+    },
+    {
+      "case_id": "injection_blocked",
+      "status": "PASS",
+      "elapsed_ms": 2,
+      "checks": {
+        "injection_blocked_before_training": true,
+        "response_identifies_prompt_injection": true
+      },
+      "error": null,
+      "evidence": {
+        "blocked": true,
+        "reason": "{\"error\": \"rejected: prediction_goal contains prompt-injection-like instructions\"}"
+      }
+    },
+    {
+      "case_id": "classification_all_metrics",
+      "status": "PASS",
+      "elapsed_ms": 677,
+      "checks": {
+        "is_ModelSelectionResult": true,
+        "has_3_candidates": true,
+        "has_candidates_list": true,
+        "create_run_fired": true,
+        "log_params_fired": true,
+        "log_metrics_fired": true,
+        "query_best_run_fired": true,
+        "register_model_fired": true,
+        "all_5_mcp_actions": true,
+        "has_f1_weighted": true,
+        "has_accuracy": true
+      },
+      "error": null,
+      "evidence": {
+        "tool_actions": [
+          "create_run",
+          "log_metrics",
+          "log_params",
+          "query_best_run",
+          "register_model"
+        ]
+      }
+    }
+  ]
+}

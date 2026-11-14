@@ -81,6 +81,10 @@ def test_dashboard_root_serves_compiled_frontend() -> None:
     assert "Autonomous ML Engineer Crew" in response.text
     assert client.get("/favicon.svg").status_code == 200
 
+    guide = client.get("/project-guide")
+    assert guide.status_code == 200
+    assert "A2A Protocol" in guide.text
+
 
 def test_dashboard_run_accepts_frontend_multipart_payload(monkeypatch) -> None:
     _reset_api_state()

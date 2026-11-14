@@ -2,12 +2,13 @@
 
 **Project:** Autonomous ML Engineer Crew (CSE3101 Agentic AI, BML Munjal University)
 **Team:** Punya Mahajan (230611) · Aniket Mishra (230648) · Radhika Singh (230833)
-**Updated:** 2 November 2026 (replaces the 18 October pre-implementation audit, which is kept in git history)
+**Updated:** 14 November 2026 (114 automated tests passing; native Google ADK and application-level evaluations are separated honestly.)
 
-All 11 minimum requirements are implemented in code, covered by automated tests, and visible in the
-running dashboard. The table gives, for each one, where it lives, which tests prove it, and where to see
-it live. Run everything with `scripts\run_server.bat` → <http://127.0.0.1:8765>; run the tests with
-`.venv\Scripts\python.exe -m pytest -q`.
+Requirements 1–10 are implemented and locally verified. Requirement 11 is container-ready but needs the
+user's Google Cloud project for the final public deployment. Run the tests with
+`.venv\Scripts\python.exe -m pytest -q` (114 passed). Native Google ADK evaluation is run with
+`.venv\Scripts\python.exe scripts\run_adk_native_eval.py`; the six application-level ADK/MCP cases are run with
+`.venv\Scripts\python.exe tests\adk_eval\run_eval.py`.
 
 | # | Requirement | Where it is implemented | Tests that prove it | Where to see it live |
 |---|---|---|---|---|
@@ -20,13 +21,14 @@ it live. Run everything with `scripts\run_server.bat` → <http://127.0.0.1:8765
 | 7 | Both CrewAI and ADK, no other agentic framework | CrewAI: Flow + Data-Prep, Evaluation and Deployment agents (`orchestrator/crew_agents.py`); ADK: Model-Selection agent. Dependencies in `pyproject.toml` / `uv.lock` | `test_data_prep.py`, `test_evaluation.py`, `test_model_selection_adk.py`, `test_day2_integration.py` | **Agents & A2A** → *Who decided what* (framework per decision) |
 | 8 | Guardrails and callback-based validation | Input guardrails: CSV size/rows/path traversal, prompt injection, toxic language, target checks; raw rows never reach an LLM; CrewAI task guardrails; ADK before-agent/model/tool callbacks fail closed; quality gate before deploy; serving-policy request limits | `test_guardrails.py` (9), `test_review_fixes.py`, `test_deployment.py::test_serving_policy_limits_are_enforced`, `::test_api_predict_endpoints_and_api_key` | **Safety demos** buttons (prompt injection, toxic goal, bad CSV) |
 | 9 | Observability: tracing and provenance | Langfuse via OpenTelemetry, one trace per run across Flow → A2A → ADK (`traceparent` propagated); MLflow tracking + model registry; lineage in `PipelineResult`; SHA-256 dataset and bundle digests | `test_tracing.py` (6 tests, incl. redaction of row data) | **Langfuse trace** and **MLflow** buttons on every result |
-| 10 | End-to-end performance, cost and runtime evaluation | Usage ledger per decision (tokens, cost, latency, source) in `orchestrator/usage.py`; benchmark `scripts/benchmark.py` (success paths ×3 datasets, failure paths, monthly cost scenario) | `test_efficiency.py` (7) | `reports/benchmark.md`; **Agents & A2A** cost table on every run |
-| 11 | Deployment | Deployment and Observability Agent (`agents/deployment.py`): packages the model with a SHA-256 digest, health-checks it and serves `/predict` locally (`DEPLOY_TARGET=local`), as a **Docker container** (`DEPLOY_TARGET=docker`, image from `serving/`), or on **Google Cloud Run** (`DEPLOY_TARGET=cloudrun`) | `test_deployment.py` (11), `test_contracts.py::test_completed_pipeline_result_requires_matching_healthy_deployment` | **Predict** tab: live endpoint, serving policy, monitoring |
+| 10 | End-to-end performance, cost and runtime evaluation | Usage ledger per decision (tokens, cost, latency, source) in `orchestrator/usage.py`; benchmark `scripts/benchmark.py` (success paths ×3 datasets, failure paths, monthly cost scenario) | `test_efficiency.py` (7) | `reports/benchmark.md`; **Agents & A2A** cost table on every run. A final cloud run is still required for cloud latency/cost evidence. |
+| 11 | Deployment | Root `Dockerfile` packages the dashboard/API, CrewAI Flow, MCP tools and internal ADK A2A service. `scripts/deploy_gcp.ps1` deploys it to Cloud Run using Secret Manager. Per-model deployment code remains in `agents/deployment.py`. | `test_deployment.py` (11), `test_orchestrator_api.py::test_dashboard_root_serves_compiled_frontend`; local Docker smoke test passed | Pending live Cloud Run URL after Google Cloud setup. |
 
 ## Honest limits
 
-- **Cloud Run** needs a Google Cloud project with billing and the `gcloud` CLI logged in; the code path is
-  implemented and the same Docker image runs locally with `DEPLOY_TARGET=docker`.
+- **Cloud Run** needs a Google Cloud project with billing, the `gcloud` CLI, and four Secret Manager values
+  (Gemini key, Langfuse public key, Langfuse secret key and Langfuse project ID). The complete production image
+  has passed a local container health and dashboard smoke test; public deployment and cloud-only evaluation remain.
 - The LLM decisions use Gemini first, then a local Ollama model, then OpenRouter, then a typed rule-based
   fallback. Every decision is labelled with its real source, so a fallback is never presented as an LLM answer.
 - Only the Model-Selection agent is behind A2A; the other agents run inside the CrewAI orchestrator. This is

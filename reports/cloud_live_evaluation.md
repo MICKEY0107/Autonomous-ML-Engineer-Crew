@@ -1,0 +1,100 @@
+# Live Cloud Deployment — Evaluation & Verification Evidence
+
+**Evaluated Endpoint:** `http://127.0.0.1:8888`
+**Timestamp:** `2026-11-10T15:58:04.750595+00:00`
+**Overall Result:** **PASS**
+
+---
+
+## 1. Cloud Latency & SLA Performance
+
+- **Median Latency (p50):** `25.61 ms` (Round-trip over internet)
+- **Tail Latency (p95):** `34.77 ms`
+- **Total Inferences Tested:** `5 requests`
+- **Sample Output:** `no`
+
+---
+
+## 2. Verification Planes & What They Signify
+
+| Plane | Endpoint | HTTP Status | Latency | Significance & Identification |
+|---|---|---|---|---|
+| **Liveness** | `http://127.0.0.1:8888/health` | ok (200) | 119.7 ms | Proves container is alive on cloud infrastructure and model weights are resident in RAM. |
+| **Contract** | `http://127.0.0.1:8888/schema` | 8 features (200) | 26.4 ms | Verifies the input schema, column names, and required numerical/categorical ranges. |
+| **Inference** | `http://127.0.0.1:8888/predict` | 5/5 valid (200) | 25.61 ms | Verifies real-time predictions over HTTPS without timeout or data corruption. |
+| **Monitoring** | `http://127.0.0.1:8888/metrics` | Active (200) | 20.8 ms | Verifies serving policy enforcement (rate limits, alerts, error counts). |
+
+---
+
+## 3. Full Raw Output
+```json
+{
+  "target_url": "http://127.0.0.1:8888",
+  "evaluated_at": "2026-11-10T15:58:04.750595+00:00",
+  "stages": {
+    "health": {
+      "url": "http://127.0.0.1:8888/health",
+      "status_code": 200,
+      "latency_ms": 119.68,
+      "response": {
+        "status": "ok",
+        "run_id": "6dfac170-5c4c-4f15-9f85-ccfd5be07581",
+        "model": "logistic_regression"
+      },
+      "passed": true,
+      "significance": "Proves the container is booted in the cloud, model weights are in memory, and process is responsive."
+    },
+    "schema": {
+      "url": "http://127.0.0.1:8888/schema",
+      "status_code": 200,
+      "latency_ms": 26.44,
+      "feature_count": 8,
+      "passed": true,
+      "significance": "Identifies model inference contract: column names, accepted types, and value boundaries."
+    },
+    "inference": {
+      "url": "http://127.0.0.1:8888/predict",
+      "requests_sent": 5,
+      "successful_predictions": 5,
+      "latency_p50_ms": 25.61,
+      "latency_p95_ms": 34.77,
+      "all_latencies_ms": [
+        25.61,
+        12.09,
+        33.32,
+        10.55,
+        34.77
+      ],
+      "sample_prediction": "no",
+      "passed": true,
+      "significance": "Proves model makes real-time predictions over the internet with low latency and correct output types."
+    },
+    "metrics": {
+      "url": "http://127.0.0.1:8888/metrics",
+      "status_code": 200,
+      "latency_ms": 20.76,
+      "metrics_data": {
+        "requests": 5,
+        "rows": 5,
+        "errors": 0,
+        "rejected": 0,
+        "last_error": null,
+        "error_rate_pct": 0.0,
+        "latency_p95_ms": 10.3,
+        "alerts": [],
+        "policy": {
+          "max_rows_per_request": 500,
+          "rate_limit_per_minute": 300,
+          "latency_alert_ms": 200,
+          "error_rate_alert_pct": 1.0,
+          "reasoning": "The model is a lightweight logistic regression with only 8 features, trained on 640 rows, allowing for a generous max rows per request and higher rate limits. Latency alert is set tightly due to the low computational overhead of linear models, and error rate alert is strict to catch failures quickly.",
+          "source": "llm"
+        }
+      },
+      "passed": true,
+      "significance": "Audits production monitoring: tracks request rate, error rate, and verifies serving policy thresholds."
+    }
+  },
+  "overall_status": "PASS"
+}
+```

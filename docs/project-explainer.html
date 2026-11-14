@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autonomous ML Engineer Crew — Project & Concepts Guide</title>
+<style>
+  :root {
+    --bg-primary: #0a0f1d;
+    --bg-secondary: #111a2e;
+    --bg-card: #18233c;
+    --bg-card-hover: #1f2d4d;
+    --border: #233554;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent-blue: #38bdf8;
+    --accent-cyan: #22d3ee;
+    --accent-purple: #a855f7;
+    --accent-green: #34d399;
+    --accent-yellow: #fbbf24;
+    --accent-red: #f87171;
+    --sidebar-w: 280px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    display: flex;
+    min-height: 100vh;
+  }
+  /* Sidebar */
+  #sidebar {
+    width: var(--sidebar-w);
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    overflow-y: auto;
+    padding: 1.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    z-index: 100;
+  }
+  .sidebar-header {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.5rem;
+  }
+  .sidebar-header h2 {
+    font-size: 1.05rem;
+    color: var(--accent-cyan);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .sidebar-header p {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+  }
+  .nav-group-title {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-top: 0.75rem;
+    margin-bottom: 0.25rem;
+    padding-left: 0.5rem;
+  }
+  .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.65rem;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.82rem;
+    transition: all 0.15s ease;
+  }
+  .nav-link:hover, .nav-link.active {
+    background: var(--bg-card);
+    color: var(--accent-cyan);
+  }
+  .nav-link .badge {
+    margin-left: auto;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--accent-blue);
+  }
+  /* Main Content */
+  #content {
+    margin-left: var(--sidebar-w);
+    flex: 1;
+    padding: 2.5rem 3rem 5rem 3rem;
+    max-width: 1200px;
+  }
+  header.hero {
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: rgba(34, 211, 238, 0.12);
+    color: var(--accent-cyan);
+    border: 1px solid rgba(34, 211, 238, 0.25);
+    margin-bottom: 0.75rem;
+  }
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+  }
+  .hero-sub {
+    font-size: 1.05rem;
+    color: var(--text-secondary);
+    max-width: 800px;
+    margin-bottom: 1.25rem;
+  }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+  }
+  .meta-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+  }
+  .meta-card .label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .meta-card .val {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-top: 0.15rem;
+  }
+  /* Sections */
+  section {
+    margin-bottom: 3.5rem;
+    scroll-margin-top: 2rem;
+  }
+  h2.sec-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  h2.sec-title::before {
+    content: "";
+    display: inline-block;
+    width: 4px;
+    height: 1.2rem;
+    background: var(--accent-cyan);
+    border-radius: 2px;
+  }
+  p.sec-desc {
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    margin-bottom: 1.25rem;
+  }
+  /* Cards & Grid */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 1.25rem;
+  }
+  .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+  .card:hover {
+    border-color: #3b5078;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+  }
+  .card-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #fff;
+  }
+  .card-subtitle {
+    font-size: 0.75rem;
+    color: var(--accent-blue);
+    font-family: monospace;
+  }
+  /* Architecture Diagram (CSS Flow) */
+  .diagram-container {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    overflow-x: auto;
+  }
+  .flow-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .flow-box {
+    padding: 0.75rem 1.2rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: center;
+    min-width: 140px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  }
+  .box-user { background: #1e293b; border: 1px solid #475569; color: #f8fafc; }
+  .box-crewai { background: rgba(168, 85, 247, 0.18); border: 1px solid rgba(168, 85, 247, 0.5); color: #d8b4fe; }
+  .box-adk { background: rgba(52, 211, 153, 0.18); border: 1px solid rgba(52, 211, 153, 0.5); color: #6ee7b7; }
+  .box-mcp { background: rgba(251, 191, 36, 0.18); border: 1px solid rgba(251, 191, 36, 0.5); color: #fde68a; }
+  .box-cloud { background: rgba(56, 189, 248, 0.18); border: 1px solid rgba(56, 189, 248, 0.5); color: #7dd3fc; }
+  .box-guard { background: rgba(248, 113, 113, 0.18); border: 1px solid rgba(248, 113, 113, 0.5); color: #fca5a5; }
+  .flow-arrow {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+  /* Code Blocks */
+  pre {
+    background: #070b14;
+    border: 1px solid #1a2744;
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.8rem;
+    color: #e2e8f0;
+    margin: 0.75rem 0;
+    line-height: 1.5;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.82em;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.15em 0.35em;
+    border-radius: 4px;
+    color: var(--accent-cyan);
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+  }
+  /* Collapsible */
+  details {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+  }
+  details summary {
+    padding: 0.85rem 1.1rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+    list-style: none;
+    font-size: 0.9rem;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::after {
+    content: "+";
+    font-size: 1.2rem;
+    color: var(--accent-cyan);
+    font-weight: 700;
+    transition: transform 0.2s ease;
+  }
+  details[open] summary::after {
+    content: "−";
+  }
+  details[open] summary {
+    border-bottom: 1px solid var(--border);
+    background: rgba(34, 211, 238, 0.04);
+  }
+  .details-body {
+    padding: 1.1rem;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+  }
+  /* Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+  }
+  th, td {
+    padding: 0.7rem 0.9rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--bg-card);
+    color: #fff;
+    font-weight: 600;
+  }
+  tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .badge-req {
+    background: rgba(52, 211, 153, 0.15);
+    color: var(--accent-green);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  /* Callout alert */
+  .callout {
+    background: rgba(56, 189, 248, 0.08);
+    border-left: 4px solid var(--accent-blue);
+    padding: 1rem 1.25rem;
+    border-radius: 0 8px 8px 0;
+    margin: 1rem 0;
+    font-size: 0.88rem;
+  }
+  .callout-title {
+    font-weight: 700;
+    color: var(--accent-blue);
+    margin-bottom: 0.25rem;
+  }
+  /* Print Styles */
+  @media print {
+    #sidebar { display: none; }
+    #content { margin-left: 0; padding: 0; max-width: 100%; }
+    details { border: 1px solid #ccc; }
+    details summary::after { display: none; }
+    .card { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav id="sidebar">
+  <div class="sidebar-header">
+    <h2>Autonomous ML Crew</h2>
+    <p>CSE3101 Agentic AI • BML Munjal Univ</p>
+  </div>
+
+  <span class="nav-group-title">Overview</span>
+  <a href="#hero" class="nav-link active"><span>🏠</span> Overview</a>
+  <a href="#what-is-agentic" class="nav-link"><span>🧠</span> What is Agentic AI?</a>
+  <a href="#architecture" class="nav-link"><span>🏛️</span> System Architecture</a>
+
+  <span class="nav-group-title">The Agents</span>
+  <a href="#agents" class="nav-link"><span>🤖</span> 5 Specialized Agents <span class="badge">5</span></a>
+  <a href="#a2a-protocol" class="nav-link"><span>🔗</span> A2A Protocol (Interoperability)</a>
+
+  <span class="nav-group-title">Core Systems</span>
+  <a href="#requirements" class="nav-link"><span>✅</span> 11 Project Requirements <span class="badge">11/11</span></a>
+  <a href="#mcp-tools" class="nav-link"><span>🔧</span> MCP Tools (FastMCP)</a>
+  <a href="#contracts" class="nav-link"><span>📋</span> Pydantic v2 Contracts</a>
+  <a href="#callbacks" class="nav-link"><span>📡</span> Callbacks & Monitoring</a>
+  <a href="#guardrails" class="nav-link"><span>🛡️</span> Security & Guardrails</a>
+  <a href="#observability" class="nav-link"><span>🔭</span> Observability (Langfuse)</a>
+  <a href="#eval-testing" class="nav-link"><span>🧪</span> Evaluation & ADK Eval</a>
+  <a href="#cloud-deployment" class="nav-link"><span>☁️</span> Google Cloud Run</a>
+
+  <span class="nav-group-title">Reference</span>
+  <a href="#how-to-run" class="nav-link"><span>🚀</span> How to Run & Demo</a>
+  <a href="#glossary" class="nav-link"><span>📖</span> Concepts Glossary</a>
+</nav>
+
+<!-- Content -->
+<main id="content">
+
+  <!-- HERO -->
+  <header class="hero" id="hero">
+    <span class="tag">B.Tech CSE • Agentic AI Capstone Project</span>
+    <h1>Autonomous ML Engineer Crew</h1>
+    <p class="hero-sub">
+      A multi-agent tabular machine learning pipeline combining <strong>CrewAI Flow</strong> and <strong>Google ADK</strong> over the <strong>A2A protocol</strong>, <strong>Model Context Protocol (MCP)</strong> tools, <strong>Pydantic v2</strong> closed schemas, <strong>MLflow</strong> tracking, <strong>Langfuse/OpenTelemetry</strong> tracing, and <strong>Google Cloud Run</strong> deployment.
+    </p>
+
+    <div class="meta-grid">
+      <div class="meta-card">
+        <div class="label">Course</div>
+        <div class="val">CSE3101: Agentic AI</div>
+      </div>
+      <div class="meta-card">
+        <div class="label">Institution</div>
+        <div class="val">BML Munjal University</div>
+      </div>
+      <div class="meta-card">
+        <div class="label">Team Members</div>
+        <div class="val">Punya (230611) • Aniket (230648) • Radhika (230833)</div>
+      </div>
+      <div class="meta-card">
+        <div class="label">Test Suite</div>
+        <div class="val" style="color: var(--accent-green);">100% Passed (108 tests)</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 1. WHAT IS AGENTIC AI -->
+  <section id="what-is-agentic">
+    <h2 class="sec-title">What is Agentic AI?</h2>
+    <p class="sec-desc">Understanding the transition from passive LLMs to autonomous decision-making agents.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Traditional Software & Passive LLMs</div>
+        </div>
+        <p style="color: var(--text-secondary); font-size: 0.88rem;">
+          In traditional programs, logic is hardcoded (<code>if/else</code>). In simple ChatGPT-like apps, an LLM answers one prompt passively without taking real-world actions, reading external files, or recovering from its own errors.
+        </p>
+      </div>
+      <div class="card" style="border-color: rgba(34, 211, 238, 0.4);">
+        <div class="card-header">
+          <div class="card-title" style="color: var(--accent-cyan);">Agentic AI (This Project)</div>
+        </div>
+        <p style="color: var(--text-secondary); font-size: 0.88rem;">
+          Agents are autonomous entities with <strong>roles, goals, tools, memory, and reflection</strong>. They perceive environment state, call external tools (MCP), collaborate across frameworks (A2A), and inspect results to retry when performance falls below threshold (Evaluator-Optimizer loop).
+        </p>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top: 1.25rem;">
+      <div class="callout-title">The Seam: LLM Policy vs Deterministic Execution</div>
+      In this project, <strong>LLMs never touch raw data rows</strong>. LLMs act as the <em>policy layer</em> (planning hyperparameters, deciding data split ratios, formulating reflection feedback). Deterministic Python code executes the plan, trains scikit-learn models, computes metrics, and validates schemas.
+    </div>
+  </section>
+
+  <!-- 2. ARCHITECTURE -->
+  <section id="architecture">
+    <h2 class="sec-title">System Architecture</h2>
+    <p class="sec-desc">End-to-end execution flow showing framework boundaries and protocol hand-offs.</p>
+
+    <div class="diagram-container">
+      <div class="flow-row">
+        <div class="flow-box box-user">User: CSV + Target + Goal</div>
+        <div class="flow-arrow">➔</div>
+        <div class="flow-box box-guard">Input Guardrails<br><small style="opacity:0.7;">Size, Rows, Path, Injection, Toxic</small></div>
+      </div>
+
+      <div class="flow-row">
+        <div class="flow-arrow">⬇</div>
+      </div>
+
+      <div class="flow-row">
+        <div class="flow-box box-crewai" style="min-width: 320px;">
+          <strong>CrewAI Flow: AutonomousMLEngineerFlow</strong><br>
+          <small style="opacity:0.8;">Owns mutable PipelineState, routes stages, coordinates retries</small>
+        </div>
+      </div>
+
+      <div class="flow-row">
+        <div class="flow-arrow">⬇</div>
+      </div>
+
+      <div class="flow-row">
+        <div class="flow-box box-crewai">
+          <strong>1. Data-Prep Agent (CrewAI)</strong><br>
+          <small>LLM plans DataPrepPlan</small>
+        </div>
+        <div class="flow-arrow">⮂</div>
+        <div class="flow-box box-mcp">
+          <strong>MCP Tool 1</strong><br>
+          <small>profile_dataset (FastMCP)</small>
+        </div>
+      </div>
+
+      <div class="flow-row">
+        <div class="flow-arrow">⬇ DataPrepResult</div>
+      </div>
+
+      <div class="flow-row" style="background: rgba(52, 211, 153, 0.05); padding: 1rem; border-radius: 8px; border: 1px dashed rgba(52, 211, 153, 0.3);">
+        <div style="text-align: center; width: 100%;">
+          <div style="font-size: 0.75rem; color: var(--accent-green); font-weight: 700; margin-bottom: 0.5rem;">A2A PROTOCOL BOUNDARY (HTTP JSON-RPC: port 8080 locally, port 8081 inside Cloud Run)</div>
+          <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <div class="flow-box box-crewai">CrewAI a2a_client<br><small>Agent Card Discovery</small></div>
+            <div class="flow-arrow">➔ SendMessage ➔</div>
+            <div class="flow-box box-adk">
+              <strong>2. Model Selection Agent (Google ADK)</strong><br>
+              <small>LLM plans search ➔ Trains 3 models ➔ LLM picks winner</small>
+            </div>
+            <div class="flow-arrow">⮂</div>
+            <div class="flow-box box-mcp">
+              <strong>MCP Tool 2</strong><br>
+              <small>log_experiment (MLflow)</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-row">
+        <div class="flow-arrow">⬇ ModelSelectionResult</div>
+      </div>
+
+      <div class="flow-row">
+        <div class="flow-box box-crewai">
+          <strong>3. Evaluation Agent (CrewAI)</strong><br>
+          <small>Held-out test set evaluation</small>
+        </div>
+        <div class="flow-arrow">➔ Quality Gate ➔</div>
+        <div class="flow-box" style="background: #27272a; border: 1px solid #52525b;">Pass or Retry?</div>
+      </div>
+
+      <div class="flow-row" style="justify-content: space-around; width: 100%;">
+        <div style="text-align: center;">
+          <div style="color: var(--accent-green); font-size: 0.8rem; font-weight: 700;">PASS</div>
+          <div class="flow-arrow">⬇</div>
+          <div class="flow-box box-crewai">
+            <strong>4. Deployment Agent (CrewAI)</strong><br>
+            <small>Serving policy + SHA-256 bundle</small>
+          </div>
+          <div class="flow-arrow">⬇</div>
+          <div class="flow-box box-cloud">
+            <strong>5. Google Cloud Run</strong><br>
+            <small>Live /predict & /health endpoint</small>
+          </div>
+        </div>
+
+        <div style="text-align: center;">
+          <div style="color: var(--accent-red); font-size: 0.8rem; font-weight: 700;">FAIL (Retry &lt; 2)</div>
+          <div class="flow-arrow">⤴ Feedback loop</div>
+          <div class="flow-box box-guard">
+            <strong>Reflection Feedback</strong><br>
+            <small>Fed back into ADK agent over A2A</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. THE 5 AGENTS -->
+  <section id="agents">
+    <h2 class="sec-title">The 5 Specialized Agents</h2>
+    <p class="sec-desc">Detailed breakdown of each agent's framework, responsibilities, input/output contracts, and reasoning scope.</p>
+
+    <div class="grid-2">
+      <!-- Agent 1 -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">1. Data Preparation Engineer</div>
+          <span class="badge" style="background: rgba(168, 85, 247, 0.2); color: #d8b4fe;">CrewAI</span>
+        </div>
+        <div class="card-subtitle">agents/data_prep.py</div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0.5rem 0;">
+          <strong>Role:</strong> Ingests dataset, triggers profiling MCP tool, plans data transformation, and safely partitions data.
+        </p>
+        <ul style="font-size: 0.82rem; color: var(--text-secondary); margin-left: 1.2rem; line-height: 1.6;">
+          <li><strong>Input:</strong> CSV path, target column, prediction goal</li>
+          <li><strong>LLM Decision:</strong> <code>DataPrepPlan</code> (test split size between 0.15-0.30, imputation strategy, column exclusion)</li>
+          <li><strong>Tool:</strong> <code>tools/profile_dataset.py</code> (FastMCP)</li>
+          <li><strong>Output:</strong> <code>DataPrepResult</code> with train/test artifact URIs</li>
+        </ul>
+      </div>
+
+      <!-- Agent 2 -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">2. Model Selection Specialist</div>
+          <span class="badge" style="background: rgba(52, 211, 153, 0.2); color: #6ee7b7;">Google ADK (A2A)</span>
+        </div>
+        <div class="card-subtitle">agents/model_selection_adk.py</div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0.5rem 0;">
+          <strong>Role:</strong> Runs independently as an A2A service. Explores hyperparameters, trains 3 candidate models, and picks the best.
+        </p>
+        <ul style="font-size: 0.82rem; color: var(--text-secondary); margin-left: 1.2rem; line-height: 1.6;">
+          <li><strong>Input:</strong> <code>ModelSelectionRequest</code> over A2A HTTP JSON-RPC</li>
+          <li><strong>LLM Decisions:</strong> <code>ModelSearchPlan</code> (hyperparameters) and <code>ModelChoice</code> (within 1% quality band)</li>
+          <li><strong>Tool:</strong> <code>tools/log_experiment.py</code> (MLflow FastMCP)</li>
+          <li><strong>Output:</strong> <code>ModelSelectionResult</code> with winner URI & metrics</li>
+        </ul>
+      </div>
+
+      <!-- Agent 3 -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">3. Model Evaluation Engineer</div>
+          <span class="badge" style="background: rgba(168, 85, 247, 0.2); color: #d8b4fe;">CrewAI</span>
+        </div>
+        <div class="card-subtitle">agents/evaluation.py</div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0.5rem 0;">
+          <strong>Role:</strong> Loads winner from MLflow registry and computes metrics on held-out test data that was never seen during training.
+        </p>
+        <ul style="font-size: 0.82rem; color: var(--text-secondary); margin-left: 1.2rem; line-height: 1.6;">
+          <li><strong>Threshold:</strong> Weighted F1 ≥ 0.80 (classification) or RMSE ≤ 25% std (regression)</li>
+          <li><strong>LLM Decision:</strong> <code>EvaluationReflection</code> (root-cause diagnosis & retry advice)</li>
+          <li><strong>Output:</strong> <code>EvaluationResult</code> with pass/fail and retry feedback</li>
+        </ul>
+      </div>
+
+      <!-- Agent 4 -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">4. Deployment & Observability Agent</div>
+          <span class="badge" style="background: rgba(168, 85, 247, 0.2); color: #d8b4fe;">CrewAI</span>
+        </div>
+        <div class="card-subtitle">agents/deployment.py</div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0.5rem 0;">
+          <strong>Role:</strong> Packages model bundle with SHA-256 digest, configures runtime policy, and provisions endpoint.
+        </p>
+        <ul style="font-size: 0.82rem; color: var(--text-secondary); margin-left: 1.2rem; line-height: 1.6;">
+          <li><strong>LLM Decision:</strong> <code>ServingPolicy</code> (rate limit, batch size, latency alert threshold)</li>
+          <li><strong>Targets:</strong> <code>local</code> (FastAPI), <code>docker</code> (container), <code>cloudrun</code> (Google Cloud Run)</li>
+          <li><strong>Output:</strong> <code>DeploymentResult</code> with live service URL and health state</li>
+        </ul>
+      </div>
+
+      <!-- Agent 5 -->
+      <div class="card" style="grid-column: 1 / -1;">
+        <div class="card-header">
+          <div class="card-title">5. Pipeline Orchestrator (Flow Controller)</div>
+          <span class="badge" style="background: rgba(168, 85, 247, 0.2); color: #d8b4fe;">CrewAI Flow</span>
+        </div>
+        <div class="card-subtitle">orchestrator/flow.py</div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0.5rem 0;">
+          <strong>Role:</strong> Owns the central <code>PipelineState</code>, directs stage routing via <code>@start</code>, <code>@listen</code>, and <code>@router</code> decorators, manages callbacks, and bounds evaluation retries (maximum 2 retries, 3 total attempts).
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. A2A PROTOCOL -->
+  <section id="a2a-protocol">
+    <h2 class="sec-title">Agent-to-Agent (A2A) Protocol</h2>
+    <p class="sec-desc">How CrewAI and Google ADK achieve true framework interoperability over standard JSON-RPC HTTP.</p>
+
+    <div class="card">
+      <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1rem;">
+        In the previous evaluation, you were asked <em>"Where is A2A?"</em>. Here is exactly where and how it works:
+      </p>
+
+      <div class="callout">
+        <div class="callout-title">The 3 Steps of A2A Protocol in This Project</div>
+        <ol style="margin-left: 1.2rem; margin-top: 0.5rem; line-height: 1.7;">
+          <li><strong>Discovery:</strong> CrewAI calls <code>GET http://127.0.0.1:8080/.well-known/agent-card.json</code> using <code>A2ACardResolver</code> to read capabilities.</li>
+          <li><strong>Messaging:</strong> CrewAI formats an A2A message with <code>Role.ROLE_USER</code>, packs <code>ModelSelectionRequest</code> JSON into it, and sends it via <code>client.send_message(SendMessageRequest(...))</code>.</li>
+          <li><strong>Result Parsing:</strong> ADK executor completes the task, yields artifact text containing <code>ModelSelectionResult</code> JSON, which CrewAI parses strictly with Pydantic.</li>
+        </ol>
+      </div>
+
+      <p style="font-size: 0.85rem; color: var(--accent-cyan); font-weight: 600; margin-top: 1rem;">Client Code Location: <code>orchestrator/a2a_client.py</code></p>
+      <pre><code># orchestrator/a2a_client.py
+async def send_model_selection_task_async(base_url, payload, ...):
+    # 1. Fetch Agent Card
+    card = await A2ACardResolver(http, base_url).get_agent_card()
+
+    # 2. Connect client and format message
+    client = await create_client(card, client_config=ClientConfig(...))
+    message = new_text_message(json.dumps(payload), role=Role.ROLE_USER)
+
+    # 3. Send over JSON-RPC and collect response
+    async for response in client.send_message(SendMessageRequest(message=message)):
+        if response.HasField("task"):
+            texts.extend(get_artifact_text(a) for a in response.task.artifacts)
+    return ModelSelectionResult.model_validate(json.loads(texts[-1]))</code></pre>
+
+      <p style="font-size: 0.85rem; color: var(--accent-green); font-weight: 600; margin-top: 1rem;">Server Code Location: <code>agents/model_selection_adk.py</code></p>
+      <pre><code># agents/model_selection_adk.py
+root_agent = ModelSelectionAgent(name="autonomous_model_selection")
+app = to_a2a(root_agent, host=A2A_HOST, port=A2A_PORT)  # Serves /.well-known/agent-card.json</code></pre>
+    </div>
+  </section>
+
+  <!-- 5. 11 REQUIREMENTS AUDIT -->
+  <section id="requirements">
+    <h2 class="sec-title">11 Minimum Requirements Compliance</h2>
+    <p class="sec-desc">Audit mapping every single course requirement to verified implementation code and tests.</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Requirement</th>
+          <th>Implementation File</th>
+          <th>Verification Test</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>Context Sharing & State</td>
+          <td><code>contracts/models.py</code> (<code>PipelineState</code>)</td>
+          <td><code>test_contracts.py</code></td>
+          <td><span class="badge-req">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>MCP Tools (≥2)</td>
+          <td><code>tools/profile_dataset.py</code>, <code>tools/log_experiment.py</code></td>
+          <td><code>test_profile_dataset.py</code>, <code>test_log_experiment.py</code></td>
+          <td><span class="badge-req">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>Pydantic Structured Output</td>
+          <td>6 models in <code>contracts/models.py</code>, <code>extra="forbid"</code></td>
+          <td><code>test_contracts.py</code> (14 tests)</td>
+          <td><span class="badge-req">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>Agentic Design Patterns</td>
+          <td>Sequential + Router + Evaluator-Optimizer + Planning</td>
+          <td><code>test_flow.py</code></td>
+          <td><span class="badge-req">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td>Callbacks & Monitoring</td>
+          <td>5 Flow callbacks + ADK before/after model & tool callbacks</td>
+          <td><code>test_flow.py</code>, <code>test_model_selection_adk.py</code></td>
+          <td><span class="badge-req">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td>A2A Protocol</td>
+          <td><code>orchestrator/a2a_client.py</code> ➔ <code>agents/model_selection_adk.py</code></td>
+          <td><code>test_day2_integration.py</code>, <code>test_model_selection_adk.py</code></td>
+          <td><span class="badge-req">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td>CrewAI + ADK Frameworks Only</td>
+          <td>CrewAI for 4 agents; ADK for 1 agent; no others imported</td>
+          <td><code>pyproject.toml</code>, agent imports</td>
+          <td><span class="badge-req">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td>8</td>
+          <td>Guardrails & Safeguards</td>
+          <td>Prompt injection, toxic filters, CSV checks, fail-closed validation</td>
+          <td><code>test_guardrails.py</code> (9 tests)</td>
+          <td><span class="badge-req">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td>9</td>
+          <td>Observability (Tracing)</td>
+          <td>Langfuse OpenTelemetry spans + MLflow experiment lineage</td>
+          <td><code>test_tracing.py</code></td>
+          <td><span class="badge-req">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td>10</td>
+          <td>End-to-End Evaluation & Cost</td>
+          <td><code>orchestrator/usage.py</code> ledger + <code>scripts/benchmark.py</code></td>
+          <td><code>test_efficiency.py</code> (7 tests)</td>
+          <td><span class="badge-req">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td>11</td>
+          <td>Cloud Deployment</td>
+          <td><code>agents/deployment.py</code> (<code>_deploy_cloudrun()</code>), Dockerfile</td>
+          <td><code>test_deployment.py</code> (11 tests)</td>
+          <td><span class="badge-req">READY</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 6. MCP TOOLS -->
+  <section id="mcp-tools">
+    <h2 class="sec-title">Model Context Protocol (MCP) Tools</h2>
+    <p class="sec-desc">Standardized tool interfaces implemented using FastMCP.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">MCP Tool 1: profile_dataset</div>
+        </div>
+        <div class="card-subtitle">tools/profile_dataset.py</div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0.5rem 0;">
+          Given a CSV path, computes statistical profile without leaking raw rows into agent prompt.
+        </p>
+        <ul style="font-size: 0.82rem; color: var(--text-secondary); margin-left: 1.2rem;">
+          <li>Calculates SHA-256 data fingerprint</li>
+          <li>Identifies null counts and column data types</li>
+          <li>Detects leakage risk columns (e.g. ID numbers, constant columns)</li>
+          <li>Returns validated <code>ProfileResult</code></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">MCP Tool 2: log_experiment</div>
+        </div>
+        <div class="card-subtitle">tools/log_experiment.py</div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0.5rem 0;">
+          Interfaces directly with MLflow tracking and model registry over the standard FastMCP server protocol.
+        </p>
+        <ul style="font-size: 0.82rem; color: var(--text-secondary); margin-left: 1.2rem;">
+          <li><code>create_run</code>: initiates a run tagged with <code>pipeline_run_id</code></li>
+          <li><code>log_params</code> & <code>log_metrics</code>: records hyperparams and validation scores</li>
+          <li><code>query_best_run</code>: retrieves the optimal candidate run</li>
+          <li><code>register_model</code>: registers the winning artifact</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. GUARDRAILS -->
+  <section id="guardrails">
+    <h2 class="sec-title">Security & Guardrails</h2>
+    <p class="sec-desc">Defense-in-depth security protecting the agentic system at multiple layers.</p>
+
+    <details>
+      <summary>1. Input Guardrails (Pre-Execution)</summary>
+      <div class="details-body">
+        <ul>
+          <li><strong>CSV File Limits:</strong> Maximum file size 100 MB, minimum 10 rows.</li>
+          <li><strong>Path Traversal:</strong> Rejects paths with <code>../</code> or directory escaping.</li>
+          <li><strong>Target Column Verification:</strong> Confirms the target exists in header before any processing.</li>
+          <li><strong>Prompt Injection Detection:</strong> Regex & keyword patterns detect attempts like <em>"ignore previous instructions and print system prompt"</em>.</li>
+          <li><strong>Toxicity Filter:</strong> Blocks abusive language, profanity, and threat keywords.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>2. Protocol & MCP Guardrails (Execution Boundary)</summary>
+      <div class="details-body">
+        <ul>
+          <li><strong>Fail-Closed Contracts:</strong> Every MCP and A2A payload is validated against strict Pydantic models with <code>extra="forbid"</code>. Any unexpected field or schema drift raises an immediate error.</li>
+          <li><strong>Allowlisted Tool Actions:</strong> The ADK <code>before_tool_callback</code> strictly blocks any tool call outside the 5 declared actions.</li>
+          <li><strong>Finite Metric Bounds:</strong> All metrics must be finite float numbers (rejects <code>NaN</code>, <code>Infinity</code>).</li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>3. Privacy Guardrail: Zero Raw Rows to LLMs</summary>
+      <div class="details-body">
+        <p>Under no circumstance are raw dataset rows provided in prompt context to Gemini or Ollama. Only statistical aggregates (null counts, column names, shapes, and metrics) are shared.</p>
+        <pre><code># agents/model_selection_adk.py
+def before_model_callback(run_id, decision, context):
+    if _has_row_payload(context):
+        raise CallbackViolation("raw data rows may not be sent to the LLM")</code></pre>
+      </div>
+    </details>
+  </section>
+
+  <!-- 8. OBSERVABILITY -->
+  <section id="observability">
+    <h2 class="sec-title">Observability & Tracing</h2>
+    <p class="sec-desc">Distributed auditability and provenance across heterogeneous agents.</p>
+
+    <div class="card">
+      <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+        Every pipeline run generates a unique 128-bit UUID (e.g. <code>b755f0e9-66bf-4fb0-b4ec-3a49ca224c1c</code>) that acts as the single correlation key across:
+      </p>
+
+      <ul style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 1.5rem; line-height: 1.7;">
+        <li><strong>Langfuse & OpenTelemetry:</strong> One unified distributed trace. The W3C <code>traceparent</code> header propagates across the HTTP A2A boundary into the ADK agent.</li>
+        <li><strong>MLflow Tracking:</strong> All candidate runs are tagged with <code>pipeline_run_id</code>.</li>
+        <li><strong>Dataset Lineage:</strong> SHA-256 hash of original CSV, train artifact URI, and test artifact URI are tied to the run record.</li>
+      </ul>
+
+      <pre><code>Trace Hierarchy:
+pipeline.run
+├── agent.data_prep
+│   └── mcp.profile_dataset
+├── agent.model_selection
+│   ├── a2a.message.send (W3C traceparent propagated)
+│   └── mcp.log_and_query_experiment
+└── agent.evaluation</code></pre>
+    </div>
+  </section>
+
+  <!-- 9. ADK EVALUATION -->
+  <section id="eval-testing">
+    <h2 class="sec-title">ADK Evaluation & Test Suite</h2>
+    <p class="sec-desc">Matching the faculty demo evaluation patterns with automated test suites.</p>
+
+    <div class="card">
+      <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+        The faculty demo inspired a <strong>two-layer evaluation strategy</strong>. Google ADK scores the agent boundary itself; a separate application-level suite verifies real model training, MCP calls and callbacks. The layers are deliberately not presented as the same thing.
+      </p>
+
+      <ul style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 1.5rem; line-height: 1.7;">
+        <li><strong>Native ADK:</strong> <code>tests/adk_native_eval/guardrails.test.json</code> is run by Google ADK's <code>AgentEvaluator</code>. Two rejection scenarios score <code>1.0</code> for response match and <code>1.0</code> for the expected no-tool trajectory.</li>
+        <li><strong>Application integration:</strong> <code>tests/adk_eval/run_eval.py</code> runs six cases: classification, regression, retry, malformed input, prompt injection and the complete MLflow MCP action set.</li>
+        <li><strong>Evidence:</strong> the native evaluator writes <code>reports/adk_native_eval.csv</code>; the application suite writes JSON, Markdown and an HTML report.</li>
+        <li><strong>Scope note:</strong> MCP calls occur inside this custom ADK agent and are proved by callback evidence in the application suite; they are not falsely labelled as ADK function-call events.</li>
+      </ul>
+
+      <div style="margin-top: 1rem; display: flex; gap: 10px; flex-wrap: wrap;">
+        <a href="../reports/adk_native_eval.csv" target="_blank" style="display: inline-block; background: rgba(34, 211, 238, 0.15); color: #22d3ee; border: 1px solid rgba(34, 211, 238, 0.3); padding: 6px 14px; border-radius: 6px; text-decoration: none; font-size: 0.82rem; font-weight: 600;">📊 Open Native ADK Metrics</a>
+        <a href="../reports/eval_results_report.html" target="_blank" style="display: inline-block; background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); padding: 6px 14px; border-radius: 6px; text-decoration: none; font-size: 0.82rem; font-weight: 600;">📑 Open Application Evaluation Report</a>
+      </div>
+
+      <div class="callout" style="margin-top: 1rem;">
+        <div class="callout-title">Current Test Suite Status</div>
+        <strong>114 automated pytest unit and integration tests pass.</strong> The repeatable evidence command is <code>python -m pytest -q</code>; run native ADK evaluation with <code>python scripts/run_adk_native_eval.py</code> and the six application cases with <code>python tests/adk_eval/run_eval.py</code>.
+      </div>
+    </div>
+  </section>
+
+  <!-- 10. CLOUD RUN DEPLOYMENT -->
+  <section id="cloud-deployment">
+    <h2 class="sec-title">Google Cloud Run Deployment</h2>
+    <p class="sec-desc">One Cloud Run service hosts the public dashboard/API, CrewAI orchestration and the internal ADK A2A service.</p>
+
+    <div class="card">
+      <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+        The final demonstration is <strong>cloud-only</strong>. The root <code>Dockerfile</code> builds the React dashboard and the FastAPI/CrewAI/ADK runtime together; the internal A2A service listens on port <code>8081</code> while Cloud Run exposes the dashboard/API on its assigned HTTPS URL.
+      </p>
+
+      <div class="grid-2" style="margin-top: 0.75rem;">
+        <div style="background: var(--bg-card); padding: 1rem; border-radius: 8px;">
+          <div style="color: var(--accent-cyan); font-weight: 700; font-size: 0.9rem;">1. Cloud Run application</div>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
+            The dashboard, FastAPI API, CrewAI Flow, FastMCP tools and ADK A2A boundary run in the same cloud revision. Generated-model prediction uses <code>/api/deployments/{run_id}/predict</code> on that public service.
+          </p>
+        </div>
+        <div style="background: var(--bg-card); padding: 1rem; border-radius: 8px;">
+          <div style="color: var(--accent-green); font-weight: 700; font-size: 0.9rem;">2. Secrets and tracing</div>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
+            Gemini and Langfuse credentials are injected from Google Secret Manager. Langfuse trace URLs are retained per pipeline run for provenance.
+          </p>
+        </div>
+      </div>
+
+      <p style="font-size: 0.85rem; color: var(--accent-blue); font-weight: 600; margin-top: 1.25rem;">Deployment command:</p>
+      <pre><code># Create the four Secret Manager secrets documented in scripts/deploy_gcp.ps1,
+# then deploy the complete system:
+.\scripts\deploy_gcp.ps1 -ProjectId your-project-id -Region asia-south1
+
+# Open the printed HTTPS URL and verify:
+GET  https://your-service.run.app/api/health
+GET  https://your-service.run.app/project-guide
+POST https://your-service.run.app/api/pipeline/run</code></pre>
+    </div>
+  </section>
+
+  <!-- 11. HOW TO RUN -->
+  <section id="how-to-run">
+    <h2 class="sec-title">How to Run & Demonstrate</h2>
+    <p class="sec-desc">Step-by-step commands for running the project in evaluation.</p>
+
+    <div class="card">
+      <div class="callout">
+        <div class="callout-title">Final Evaluation Demo: Use the Cloud Run URL</div>
+        <pre><code># 1. Open the HTTPS URL printed by scripts/deploy_gcp.ps1
+# 2. In the cloud dashboard:
+- Pick "House Prices" from sample datasets
+- Choose target column "sale_price"
+- Type goal: "predict house sale price"
+- Click "Build my model"
+- Switch to "Agents & A2A" tab to show the live A2A exchange
+- Switch to "Trace & contracts" tab to show Pydantic contracts and Langfuse trace</code></pre>
+      </div>
+
+      <div class="callout" style="border-left-color: var(--accent-purple); margin-top: 1rem;">
+        <div class="callout-title">Option B: Running CLI Benchmark & Testing</div>
+        <pre><code># Run complete test suite (114 tests)
+.venv\Scripts\python.exe -m pytest -q
+
+# Run native Google ADK evaluation
+.venv\Scripts\python.exe scripts\run_adk_native_eval.py
+
+# Run application-level ADK/MCP evaluation report
+.venv\Scripts\python.exe tests\adk_eval\run_eval.py
+
+# Run benchmark (cost, runtime, pass rate across datasets)
+.venv\Scripts\python.exe scripts\benchmark.py --runs 1 --offline</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12. GLOSSARY -->
+  <section id="glossary">
+    <h2 class="sec-title">Concepts Glossary</h2>
+    <p class="sec-desc">Clear, concise definitions for all key course terms.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title" style="font-size: 0.95rem; color: var(--accent-cyan);">A2A Protocol</div>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.25rem;">
+          Agent-to-Agent protocol: an open standard using HTTP JSON-RPC and Agent Cards (<code>.well-known/agent-card.json</code>) that enables agents built in different frameworks (like CrewAI and Google ADK) to discover and call each other.
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-title" style="font-size: 0.95rem; color: var(--accent-green);">Model Context Protocol (MCP)</div>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.25rem;">
+          An open standard protocol that connects AI models to external tools, databases, and APIs in a clean client-server architecture without framework vendor lock-in.
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-title" style="font-size: 0.95rem; color: var(--accent-purple);">CrewAI Flow</div>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.25rem;">
+          Event-driven structured workflow orchestration using <code>@start</code>, <code>@listen</code>, and <code>@router</code> decorators managing a shared state object.
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-title" style="font-size: 0.95rem; color: var(--accent-yellow);">Evaluator-Optimizer Loop</div>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.25rem;">
+          An agentic design pattern where an evaluation agent reviews the output of a generating agent, provides natural language critique, and prompts a refined attempt (bounded to prevent infinite loops).
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-title" style="font-size: 0.95rem; color: var(--accent-blue);">Langfuse Tracing</div>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.25rem;">
+          Open-source observability platform implementing OpenTelemetry spans for tracing execution paths, token consumption, latency, and agent hierarchies.
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-title" style="font-size: 0.95rem; color: var(--accent-red);">Guardrail</div>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.25rem;">
+          Automated safety and validation checks that intercept inputs and outputs to prevent security attacks (injection, toxic prompts) or data corruption (malformed schemas, data leakage).
+        </p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  // Active link highlighter on scroll
+  const sections = document.querySelectorAll('section, header');
+  const navLinks = document.querySelectorAll('.nav-link');
+  window.addEventListener('scroll', () => {
+    let current = '';
+    sections.forEach(section => {
+      const sectionTop = section.offsetTop - 100;
+      if (pageYOffset >= sectionTop) {
+        current = section.getAttribute('id');
+      }
+    });
+    navLinks.forEach(link => {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === '#' + current) {
+        link.classList.add('active');
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

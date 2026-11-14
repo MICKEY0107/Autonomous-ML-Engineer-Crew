@@ -16,7 +16,7 @@ import os
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 from uuid import UUID, uuid4
@@ -171,6 +171,11 @@ def _usage_source(records: list[dict[str, Any]]) -> str:
 
 class AutonomousMLEngineerFlow(Flow[PipelineState]):
     """Typed CrewAI orchestration with a bounded evaluator-optimizer loop."""
+
+    # This project shares context through the explicit, validated PipelineState.
+    # CrewAI 1.15+ otherwise auto-creates a LanceDB-backed semantic memory store,
+    # which is unnecessary here and would introduce a second source of state.
+    _skip_auto_memory: ClassVar[bool] = True
 
     callbacks: FlowCallbacks = Field(default_factory=FlowCallbacks)
     a2a_url: str = DEFAULT_A2A_URL

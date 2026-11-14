@@ -10,7 +10,7 @@ requires-python = ">=3.11,<3.14"
 dependencies = [
     "crewai>=1.15,<2",
     "fastapi>=0.115,<1",
-    "google-adk[a2a]>=2.12,<3",
+    "google-adk[a2a,eval]>=2.12,<3",
     "langfuse>=4.7,<5",
     "mcp>=1.28.1,<2",
     "mlflow>=3.5,<4",

@@ -19,6 +19,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# Keep the canonical demo deterministic and credential-free. Callers can set
+# either value explicitly when they want live LLM decisions or another target.
+os.environ.setdefault("LLM_MODE", "offline")
+os.environ.setdefault("DEPLOY_TARGET", "local")
+os.environ.setdefault("DEPLOY_ON_SUCCESS", "on")
+
 import pandas as pd
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
@@ -76,6 +82,7 @@ class RunOutcome:
     result: PipelineResult
     trace_exporter: InMemorySpanExporter
     elapsed_seconds: float
+    deployment_error: str | None = None
 
 
 def _generate_house_prices(rows: int = 500) -> pd.DataFrame:
@@ -320,9 +327,24 @@ def _pipeline_result(
         elapsed_seconds,
     )
     usage_report = usage.summary()
+    deployment = state.deployment_result
+    deployed = (
+        succeeded
+        and deployment is not None
+        and str(deployment.health_status) == "healthy"
+    )
+    if deployed:
+        lineage.update(
+            {
+                "deployment_revision": deployment.deployment_revision,
+                "deployment_digest": deployment.image_digest,
+            }
+        )
     return PipelineResult(
         run_id=state.run_id,
-        status="evaluation_completed" if succeeded else "failed",
+        status="completed" if deployed else ("evaluation_completed" if succeeded else "failed"),
+        endpoint=deployment.service_url if deployed else None,
+        deployment=deployment if deployed else None,
         model_card_markdown=model_card,
         lineage=lineage,
         trace_url=trace_url,
@@ -377,6 +399,7 @@ def run_pipeline(
         result=result,
         trace_exporter=exporter,
         elapsed_seconds=elapsed,
+        deployment_error=flow.deployment_error,
     )
 
 
@@ -405,6 +428,8 @@ def print_terminal_failure(outcome: RunOutcome) -> None:
         reason = "; ".join(outcome.state.errors) or "No reason was recorded."
         print(f"\nTerminal state: {outcome.state.status}")
         print(f"Reason: {reason}")
+    elif outcome.deployment_error:
+        print(f"\nDeployment skipped: {outcome.deployment_error}")
 
 
 def print_retry_spans(outcome: RunOutcome) -> int:
