@@ -6,11 +6,11 @@ Each run is a full `main.py` execution: guardrails, CrewAI Data-Prep agent, MCP 
 
 ## Success paths
 
-| Scenario | Runs | Passed | Runtime p50 | Runtime p95 | Mean LLM calls | Local / cached / rule-based | Mean tokens | Mean cost / run | Mean held-out metric | Deployed |
+| Scenario | Runs | Passed | Runtime p50 | Runtime p95 | Mean LLM calls | Cached / rule-based | Mean tokens | Mean cost / run | Mean held-out metric | Deployed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| house prices (regression) | 1 | 1/1 | 4.2 s | 4.2 s | 0.0 | 0.0 / 0.0 / 5.0 | 0 | $0.00000 | rmse 18,271.4424 | 1/1 |
-| customer churn (classification) | 1 | 1/1 | 4.4 s | 4.4 s | 0.0 | 0.0 / 0.0 / 5.0 | 0 | $0.00000 | f1_weighted 0.898 | 1/1 |
-| iris (3-class) | 1 | 1/1 | 3.9 s | 3.9 s | 0.0 | 0.0 / 0.0 / 5.0 | 0 | $0.00000 | f1_weighted 0.9333 | 1/1 |
+| house prices (regression) | 1 | 1/1 | 4.2 s | 4.2 s | 0.0 | 0.0 / 5.0 | 0 | $0.00000 | rmse 18,271.4424 | 1/1 |
+| customer churn (classification) | 1 | 1/1 | 4.4 s | 4.4 s | 0.0 | 0.0 / 5.0 | 0 | $0.00000 | f1_weighted 0.898 | 1/1 |
+| iris (3-class) | 1 | 1/1 | 3.9 s | 3.9 s | 0.0 | 0.0 / 5.0 | 0 | $0.00000 | f1_weighted 0.9333 | 1/1 |
 
 Across all 3 success-path runs: runtime p50 4.2 s, p95 4.4 s; 3/3 passed the quality bar.
 

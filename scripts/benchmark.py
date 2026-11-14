@@ -89,7 +89,6 @@ def run_once(name: str, csv: str, target: str, goal: str, extra: list[str], env:
         "tokens": (result.get("input_tokens") or 0) + (result.get("output_tokens") or 0),
         "cost_usd": result.get("estimated_cost_usd") or 0.0,
         "llm_calls": usage.get("llm_requests", 0),
-        "local_calls": usage.get("local_llm_requests", 0),
         "cache_hits": usage.get("cache_hits", 0),
         "fallbacks": usage.get("fallback_decisions", 0),
         "retries": result.get("retry_count", 0),
@@ -151,7 +150,7 @@ def main() -> None:
         "",
         "## Success paths",
         "",
-        "| Scenario | Runs | Passed | Runtime p50 | Runtime p95 | Mean LLM calls | Local / cached / rule-based | Mean tokens | Mean cost / run | Mean held-out metric | Deployed |",
+        "| Scenario | Runs | Passed | Runtime p50 | Runtime p95 | Mean LLM calls | Cached / rule-based | Mean tokens | Mean cost / run | Mean held-out metric | Deployed |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     summary: dict[str, dict] = {}
@@ -165,7 +164,6 @@ def main() -> None:
             "runtime_p50_s": round(_percentile(runtimes, 50), 1),
             "runtime_p95_s": round(_percentile(runtimes, 95), 1),
             "mean_llm_calls": round(_mean(rows, "llm_calls"), 1),
-            "mean_local": round(_mean(rows, "local_calls"), 1),
             "mean_cache": round(_mean(rows, "cache_hits"), 1),
             "mean_fallback": round(_mean(rows, "fallbacks"), 1),
             "mean_tokens": round(_mean(rows, "tokens")),
@@ -177,7 +175,7 @@ def main() -> None:
         row = summary[name]
         lines.append(
             f"| {name} | {row['runs']} | {row['passed']}/{row['runs']} | {row['runtime_p50_s']} s | "
-            f"{row['runtime_p95_s']} s | {row['mean_llm_calls']} | {row['mean_local']} / {row['mean_cache']} / "
+            f"{row['runtime_p95_s']} s | {row['mean_llm_calls']} | {row['mean_cache']} / "
             f"{row['mean_fallback']} | {row['mean_tokens']:,} | ${row['mean_cost_usd']:.5f} | "
             f"{metric} {row['mean_metric']:,} | {row['deployed']}/{row['runs']} |"
         )

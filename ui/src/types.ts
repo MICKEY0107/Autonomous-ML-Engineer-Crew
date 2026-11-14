@@ -69,7 +69,6 @@ export interface UsageReport {
   pricing?: { input_per_1m_usd: number; output_per_1m_usd: number };
   by_agent?: Record<string, UsageAgentBucket>;
   cache_hits?: number;
-  local_llm_requests?: number;
   fallback_decisions?: number;
   calls?: UsageCall[];
 }
