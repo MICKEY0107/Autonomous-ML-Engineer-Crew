@@ -1,6 +1,9 @@
 # Python
 .venv/
+.cache/
+.mypy_cache/
 .pytest_cache/
+.ruff_cache/
 __pycache__/
 *.py[cod]
 .coverage
@@ -8,19 +11,31 @@ htmlcov/
 
 # Secrets
 .env
+.env.*
+!.env.example
+crewai_settings.json
 
 # Generated run output
+.build/
+.codex-*/
 mlruns/
 artifacts/
 output/
 tmp/
 .playwright-cli/
 .codex-doc-read/
+reports/_*
+*.log
+*.temp
+*.tmp
 
 # Frontend
-ui/node_modules/
+node_modules/
 ui/dist/
 ui/*.tsbuildinfo
+
+# Downloaded local executables
+scripts/*.exe
 
 # Course-provided material (not ours to republish)
 Course_Handout__Agentic AI.pdf
@@ -28,3 +43,8 @@ AG_AI_Project_Synopsis_Template.pdf
 
 # Office lock files
 ~$*
+
+# OS/editor metadata
+.DS_Store
+Thumbs.db
+*.swp

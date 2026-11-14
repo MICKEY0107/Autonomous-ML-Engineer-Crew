@@ -1,5 +1,13 @@
 # Autonomous ML Engineer Crew — Complete Engineering Handoff
 
+> **Finalization update (2026-11-14):** This file preserves the original
+> engineering audit for historical context. Current setup, demo, and repository
+> instructions are in [`README.md`](README.md), with the guide index in
+> [`docs/README.md`](docs/README.md). The superseded Streamlit dashboard was
+> removed; React + FastAPI is the only supported UI. The final verification ran
+> 114 tests, built the React application, and completed the local end-to-end
+> demo with a healthy deployment result.
+
 **Handoff date:** 2026-10-26 (Asia/Calcutta)  
 **Workspace audited:** `C:\code\Autonomous ML Engineer Crew`  
 **Status notation used throughout:**

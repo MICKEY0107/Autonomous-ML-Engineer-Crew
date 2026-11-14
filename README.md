@@ -12,6 +12,29 @@ dashboard.
 
 ![Autonomous ML Engineer Crew architecture](architecture_diagram_publication.png)
 
+## Handoff quick start
+
+For a fresh checkout on Windows PowerShell:
+
+```powershell
+uv sync --extra dev
+cd ui
+npm ci
+npm run build
+cd ..
+.\.venv\Scripts\python.exe scripts\run_e2e.py
+```
+
+The last line is the canonical end-to-end demo. It runs locally without API
+keys by using validated offline policy fallbacks, starts the ADK/A2A service,
+prepares data, trains and evaluates candidate models, deploys the winner
+locally, and prints the final result. To use live LLM decisions, copy
+`.env.example` to `.env`, add the desired provider credentials, and set
+`LLM_MODE=live`.
+
+Open [`docs/README.md`](docs/README.md) for the organized project-guide index,
+or run the dashboard and visit <http://127.0.0.1:8000/project-guide>.
+
 ## What it does
 
 ```text
@@ -113,7 +136,7 @@ for real decisions or `LLM_MODE=offline` for repeatable local tests.
 | 8 | Guardrails | CSV size/rows/path/target checks, prompt-injection and toxic-language checks (`main.py`), CrewAI task guardrails, ADK input-validation callback, Pydantic fail-closed parsing of every MCP/A2A return, raw rows never sent to LLMs |
 | 9 | Observability | Langfuse via OpenTelemetry, one trace per `run_id` across CrewAI, A2A and ADK; MLflow lineage |
 | 10 | Performance, cost, runtime | `orchestrator/usage.py` ledger → `PipelineResult.usage_report`, CLI `[USAGE]` line, dashboard cost card; held-out metrics per run |
-| 11 | Cloud deployment | Planned for Phase 3 (Docker + Cloud Run) |
+| 11 | Cloud deployment | `agents/deployment.py`, `serving/`, the root `Dockerfile`, and `scripts/deploy_gcp.ps1` support local, Docker, and Google Cloud Run targets |
 
 ## Efficiency: provider chain, local LLM and decision cache
 
@@ -189,7 +212,7 @@ If the existing `.venv` is already populated, this step can be skipped.
 
 ```powershell
 cd ui
-npm install
+npm ci
 npm run build
 cd ..
 ```
@@ -325,7 +348,7 @@ demonstrating retry behavior, not normal model acceptance.
 
 ## End-to-end demo scripts
 
-Successful run:
+Canonical successful demo (offline-safe; no provider key required):
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\run_e2e.py
@@ -551,7 +574,12 @@ contract.
 │   └── evaluation.py              # CrewAI held-out evaluator
 ├── orchestrator/
 │   ├── flow.py                    # CrewAI flow and retry controller
+│   ├── input_guardrails.py        # Shared prompt/input safety checks
 │   └── telemetry.py               # Langfuse/OpenTelemetry integration
+├── adk_model_selection/           # ADK discovery/evaluation entry point
+├── docs/                          # Project guide and compliance documents
+├── reports/                       # Versioned verification/evaluation evidence
+├── serving/                       # Standalone model-serving application
 ├── ui/                            # React dashboard
 ├── tests/                         # Unit and integration tests
 ├── scripts/
