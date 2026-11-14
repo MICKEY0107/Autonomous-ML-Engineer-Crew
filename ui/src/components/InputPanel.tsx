@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState, type DragEvent } from "react";
-import { Database, FileSpreadsheet, Play, RotateCcw, ShieldAlert, ShieldCheck, UploadCloud } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
+import { Database, FileSpreadsheet, Play, RotateCcw, ShieldAlert, ShieldCheck, UploadCloud, X } from "lucide-react";
 import { apiErrorMessage, checkGuardrail, fetchSampleFile, getSamples } from "../api";
 import type { GuardrailCheck, RunInput, SampleDataset } from "../types";
 
@@ -43,6 +43,21 @@ export default function InputPanel({ isRunning, onRun }: InputPanelProps) {
   const [dragging, setDragging] = useState(false);
   const [guard, setGuard] = useState<(GuardrailCheck & { goal: string }) | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const clearDataset = (event?: React.MouseEvent) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    setFile(null);
+    setColumns([]);
+    setRowCount(0);
+    setTarget("");
+    setGoal("");
+    setError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   useEffect(() => {
     getSamples().then(setSamples).catch(() => setSamples([]));
@@ -120,20 +135,46 @@ export default function InputPanel({ isRunning, onRun }: InputPanelProps) {
         )}
 
         <div>
-          <div className="mb-1.5 text-xs font-medium text-slate-400">1 · Your dataset</div>
-          <label
-            className={`upload-zone min-h-[72px] ${dragging ? "upload-zone-active" : ""}`}
-            onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-          >
-            {file ? <FileSpreadsheet size={20} className="shrink-0 text-emerald-300" /> : <UploadCloud size={20} className="shrink-0 text-cyan-300" />}
-            <span className="min-w-0">
-              <span className="block truncate text-sm text-slate-200">{file ? file.name : "Drop a CSV here or click to browse"}</span>
-              <span className="block text-xs text-slate-500">{file ? `${rowCount.toLocaleString()} rows · ${columns.length} columns` : "up to 100 MB, header row required"}</span>
-            </span>
-            <input type="file" accept=".csv,text/csv" className="sr-only" disabled={isRunning} onChange={(event) => void acceptFile(event.target.files?.[0])} />
-          </label>
+          <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-400">
+            <span>1 · Your dataset</span>
+            {file && !isRunning && (
+              <button
+                type="button"
+                onClick={clearDataset}
+                className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-rose-400 transition"
+                title="Remove dataset"
+              >
+                <X size={12} />
+                <span>Remove</span>
+              </button>
+            )}
+          </div>
+          <div className="relative">
+            <label
+              className={`upload-zone min-h-[72px] ${dragging ? "upload-zone-active" : ""} ${file ? "pr-10" : ""}`}
+              onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+            >
+              {file ? <FileSpreadsheet size={20} className="shrink-0 text-emerald-300" /> : <UploadCloud size={20} className="shrink-0 text-cyan-300" />}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-slate-200">{file ? file.name : "Drop a CSV here or click to browse"}</span>
+                <span className="block text-xs text-slate-500">{file ? `${rowCount.toLocaleString()} rows · ${columns.length} columns` : "up to 100 MB, header row required"}</span>
+              </span>
+              <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="sr-only" disabled={isRunning} onChange={(event) => void acceptFile(event.target.files?.[0])} />
+            </label>
+            {file && !isRunning && (
+              <button
+                type="button"
+                onClick={clearDataset}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-400 hover:bg-slate-800/80 hover:text-rose-400 transition z-10"
+                title="Remove dataset"
+                aria-label="Remove dataset"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
         </div>
 
         <label className="flex flex-col gap-1.5 text-xs font-medium text-slate-400">
