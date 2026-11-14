@@ -31,8 +31,8 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 
 INSTRUMENTATION_SCOPE = "autonomous_ml_engineer_crew"
 SERVICE_NAME = "autonomous-ml-engineer-crew"
-LANGFUSE_TRACE_ORIGIN = os.environ["LANGFUSE_BASE_URL"].rstrip("/")
-LANGFUSE_PROJECT_ID = os.environ["LANGFUSE_PROJECT_ID"]
+LANGFUSE_TRACE_ORIGIN = os.environ.get("LANGFUSE_BASE_URL", "https://cloud.langfuse.com").strip("\"'").rstrip("/")
+LANGFUSE_PROJECT_ID = os.environ.get("LANGFUSE_PROJECT_ID", "").strip("\"'")
 REDACTED = "[REDACTED_RAW_ROW_DATA]"
 _MAX_ATTRIBUTE_CHARS = 4_096
 _SPAN_IO_UNSET = object()
