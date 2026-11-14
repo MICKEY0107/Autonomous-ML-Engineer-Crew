@@ -45,9 +45,9 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY . .
 COPY --from=ui-build /src/ui/dist ./ui/dist
 RUN uv sync --frozen --no-dev \
-    && mkdir -p /app/artifacts/ui /tmp/artifacts \
+    && mkdir -p /app/artifacts/ui /app/mlruns /tmp/artifacts \
     && useradd --create-home --uid 10001 appuser \
-    && chown -R appuser:appuser /app/artifacts /tmp/artifacts
+    && chown -R appuser:appuser /app /tmp/artifacts
 
 USER appuser
 EXPOSE 8080
