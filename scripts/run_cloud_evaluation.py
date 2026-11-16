@@ -60,14 +60,21 @@ def _multipart(fields: dict[str, str], filename: str, content: bytes) -> tuple[b
     return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
-def _dataset() -> bytes:
-    """Deterministic, row-safe classification data sufficient for a live smoke run."""
+def _dataset(*, noisy: bool = False) -> bytes:
+    """Deterministic, row-safe classification data sufficient for a live smoke run.
+
+    When noisy=True, target labels are pseudorandomly uncorrelated with features,
+    ensuring metrics fall well below strict evaluation quality gates.
+    """
 
     lines = ["signal,noise,target"]
     for index in range(240):
         signal = index % 12
         noise = (index * 7) % 19
-        target = 1 if signal >= 6 else 0
+        if noisy:
+            target = (index * 17 + 3) % 2
+        else:
+            target = 1 if signal >= 6 else 0
         lines.append(f"{signal},{noise},{target}")
     return ("\n".join(lines) + "\n").encode("utf-8")
 
@@ -80,7 +87,7 @@ def _start_pipeline(*, force_fail: bool) -> tuple[dict, int]:
             "force_fail_eval": str(force_fail).lower(),
         },
         "cloud-evaluation.csv",
-        _dataset(),
+        _dataset(noisy=force_fail),
     )
     started = time.perf_counter()
     start_deadline = time.monotonic() + START_RETRY_SECONDS
