@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Activity,
   BarChart3,
   BookOpen,
   Bot,
@@ -240,6 +241,14 @@ export default function Dashboard() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ProviderBar />
+            <a
+              href="/evaluation"
+              className="action-link action-primary w-auto text-xs"
+              title="View retained Cloud Run pipeline and agent evaluation evidence"
+            >
+              <Activity size={13} />
+              <span>Evaluation</span>
+            </a>
             <a
               href="/reports/eval_results_report.html"
               target="_blank"

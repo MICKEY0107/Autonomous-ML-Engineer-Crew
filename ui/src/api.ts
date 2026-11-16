@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { DeploymentMetadata, GuardrailCheck, PipelineResultResponse, PipelineStatusResponse, Prediction, ProvidersResponse, ResultPayload, RunInput, RunSummary, SampleDataset, DeploymentHealth, MonitoringSnapshot } from "./types";
+import type { DeploymentMetadata, EvaluationRun, EvaluationSuite, GuardrailCheck, PipelineResultResponse, PipelineStatusResponse, Prediction, ProvidersResponse, ResultPayload, RunInput, RunSummary, SampleDataset, DeploymentHealth, MonitoringSnapshot } from "./types";
 
 const api = axios.create({
   baseURL: "/api",
@@ -49,6 +49,30 @@ export async function listRuns(): Promise<RunSummary[]> {
 export async function getRun(runId: string): Promise<ResultPayload> {
   const response = await api.get<ResultPayload>(`/runs/${runId}`);
   return response.data;
+}
+
+export async function listEvaluationRuns(): Promise<EvaluationRun[]> {
+  const response = await api.get<EvaluationRun[]>("/evaluation/runs", { timeout: 30_000 });
+  return response.data;
+}
+
+export async function getEvaluationRun(runId: string): Promise<EvaluationRun> {
+  const response = await api.get<EvaluationRun>(`/evaluation/runs/${runId}`, { timeout: 30_000 });
+  return response.data;
+}
+
+export async function getLatestEvaluationSuite(): Promise<EvaluationSuite | null> {
+  try {
+    const response = await api.get<EvaluationSuite>("/evaluation/suites/latest", { timeout: 30_000 });
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) return null;
+    throw error;
+  }
+}
+
+export function evaluationDownloadUrl(runId: string): string {
+  return `/api/evaluation/runs/${runId}/download`;
 }
 
 export function downloadUrl(runId: string, kind: "model-card.md" | "result.json" | "insights.json"): string {

@@ -5,10 +5,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        canvas: "#0f1419",
-        panel: "#151b23",
-        card: "#1a202c",
-        line: "#2a3441",
+        canvas: "#0b1016",
+        panel: "#121923",
+        card: "#18212c",
+        line: "#293544",
       },
       fontFamily: {
         sans: ["Inter", "Segoe UI", "system-ui", "sans-serif"],

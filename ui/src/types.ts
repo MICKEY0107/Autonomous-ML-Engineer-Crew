@@ -368,3 +368,53 @@ export interface ContractDefinition {
   description: string;
   fields: Record<string, string>;
 }
+
+export interface EvaluationEvent {
+  category: "agent" | "a2a" | "mcp" | "callback" | "guardrail" | "pipeline";
+  name: string;
+  status: "success" | "failed" | "running" | "retry" | "blocked" | "passed";
+  duration_ms?: number | null;
+  source?: string | null;
+  destination?: string | null;
+  detail?: string | null;
+  metadata: Record<string, JsonValue>;
+}
+
+export interface EvaluationRun {
+  schema_version: "1.0";
+  run_id: string;
+  generated_at: string;
+  status: string;
+  environment: Record<string, JsonValue>;
+  dataset: Record<string, JsonValue>;
+  model_quality: Record<string, number>;
+  primary_metric?: string | null;
+  primary_metric_value?: number | null;
+  primary_threshold?: number | null;
+  pipeline: Record<string, JsonValue>;
+  events: EvaluationEvent[];
+  observability: Record<string, JsonValue>;
+  cost: Record<string, JsonValue>;
+  security: Record<string, JsonValue>;
+  storage: Record<string, JsonValue>;
+}
+
+export interface EvaluationScenario {
+  name: string;
+  category: "pipeline" | "a2a" | "mcp" | "guardrail" | "validation";
+  expected: string;
+  observed: string;
+  passed: boolean;
+  duration_ms: number;
+  run_id?: string | null;
+  detail: string;
+}
+
+export interface EvaluationSuite {
+  schema_version: "1.0";
+  suite_id: string;
+  generated_at: string;
+  target_url: string;
+  environment: Record<string, JsonValue>;
+  scenarios: EvaluationScenario[];
+}
