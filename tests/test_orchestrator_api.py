@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 
 import orchestrator_api
+from orchestrator.evaluation_evidence import build_evidence
 
 
 def _reset_api_state() -> None:
@@ -84,6 +85,42 @@ def test_dashboard_root_serves_compiled_frontend() -> None:
     guide = client.get("/project-guide")
     assert guide.status_code == 200
     assert "A2A Protocol" in guide.text
+
+    evaluation = client.get("/evaluation")
+    assert evaluation.status_code == 200
+    assert "Autonomous ML Engineer Crew" in evaluation.text
+
+
+def test_evaluation_endpoints_serve_typed_retained_evidence(monkeypatch) -> None:
+    record = build_evidence(
+        {
+            "final_result": {
+                "status": "SUCCESS",
+                "run_id": "30000000-0000-4000-8000-000000000001",
+                "metric_name": "f1_weighted",
+                "metric_value": 0.9,
+                "threshold": 0.8,
+                "runtime_ms": 100,
+                "retry_count": 0,
+                "token_count": 1,
+                "estimated_cost_usd": 0.0,
+                "trace_url": "https://example.test/trace",
+                "mlflow_url": "https://example.test/mlflow",
+            },
+            "stages_completed": [],
+            "insights": {"dataset": {}},
+        }
+    )
+    monkeypatch.setattr(orchestrator_api, "list_evidence", lambda limit: [record])
+    monkeypatch.setattr(orchestrator_api, "get_evidence", lambda run_id: record if run_id == str(record.run_id) else None)
+    monkeypatch.setattr(orchestrator_api, "evidence_json", lambda run_id: record.model_dump_json() if run_id == str(record.run_id) else None)
+    client = TestClient(orchestrator_api.app)
+
+    assert client.get("/api/evaluation/runs").json()[0]["run_id"] == str(record.run_id)
+    assert client.get(f"/api/evaluation/runs/{record.run_id}").json()["primary_metric"] == "f1_weighted"
+    download = client.get(f"/api/evaluation/runs/{record.run_id}/download")
+    assert download.status_code == 200
+    assert download.headers["content-type"].startswith("application/json")
 
 
 def test_dashboard_run_accepts_frontend_multipart_payload(monkeypatch) -> None:

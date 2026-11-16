@@ -30,6 +30,14 @@ from agents.deployment import bundle_dir, load_bundle, predict_rows
 from contracts.models import PipelineState, PipelineStatus
 from main import GuardrailViolation, validate_prediction_goal
 from orchestrator import a2a_client, run_store, serving_monitor
+from orchestrator.evaluation_evidence import (
+    build_evidence,
+    evidence_json,
+    get_evidence,
+    latest_suite,
+    list_evidence,
+    save_evidence,
+)
 from orchestrator.insights import build_run_insights
 from orchestrator.provider_status import provider_status
 from main import _pipeline_result, _start_a2a_server, create_pipeline_state, infer_task_type
@@ -131,6 +139,7 @@ _state: dict[str, Any] = {
     "final_result": None,
     "trace_data": None,
     "llm_insights": None,
+    "callback_events": [],
     "error": None,
     "started_at": None,
     "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -298,7 +307,25 @@ def _callbacks() -> FlowCallbacks:
         "deployment": "Deployment Agent",
     }
 
+    def record(event: FlowCallbackEvent, status: str, detail: str | None = None) -> None:
+        """Keep callback evidence beside the existing live stage display."""
+
+        with _lock:
+            _state.setdefault("callback_events", []).append(
+                {
+                    "name": f"flow.{event.stage}",
+                    "status": status,
+                    "detail": detail or event.message or "",
+                    "metadata": {
+                        "stage": event.stage,
+                        "retry_count": event.retry_count,
+                    },
+                }
+            )
+            _touch()
+
     def on_start(event: FlowCallbackEvent) -> None:
+        record(event, "running", "Stage callback started")
         stage_name = stage_map.get(event.stage)
         if stage_name:
             _set_stage(
@@ -314,6 +341,7 @@ def _callbacks() -> FlowCallbacks:
                 _set_stage("MCP: log_experiment", "running", detail="Tracking candidate runs")
 
     def on_complete(event: FlowCallbackEvent) -> None:
+        record(event, "success", "Stage callback completed")
         stage_name = stage_map.get(event.stage)
         if stage_name:
             _set_stage(stage_name, "success", detail=f"Attempt {event.retry_count + 1} complete")
@@ -326,11 +354,13 @@ def _callbacks() -> FlowCallbacks:
             _set_stage("Retry Controller", "success", detail=f"Retry {event.retry_count}/2 completed")
 
     def on_error(event: FlowCallbackEvent) -> None:
+        record(event, "failed", event.message or "Stage callback failed")
         stage_name = stage_map.get(event.stage, event.stage)
         if stage_name in STAGE_NAMES:
             _set_stage(stage_name, "failed", detail=event.message or "Stage failed")
 
     def on_retry(event: FlowCallbackEvent) -> None:
+        record(event, "retry", event.message or "Evaluation requested a retry")
         with _lock:
             _state["retry_count"] = event.retry_count
             retry_history = _state.setdefault("retry_history", [])
@@ -356,6 +386,7 @@ def _callbacks() -> FlowCallbacks:
         )
 
     def on_validation_failure(event: FlowCallbackEvent) -> None:
+        record(event, "failed", event.message or "Validation callback failed")
         on_error(event)
 
     return FlowCallbacks(
@@ -734,13 +765,17 @@ def _trace_tree(state: PipelineState) -> dict[str, Any]:
 
 
 def _persist_run() -> None:
-    """Save the finished run (result, insights, decisions, A2A log) to SQLite."""
+    """Persist dashboard history and the portable cloud evaluation record."""
 
     snapshot = _snapshot()
     if not snapshot.get("final_result"):
         return
     try:
-        run_store.save_run(_result_payload(snapshot))
+        payload = _result_payload(snapshot)
+        evidence = build_evidence(payload)
+        payload["evaluation_evidence"] = evidence.model_dump(mode="json")
+        payload["evaluation_storage"] = save_evidence(evidence)
+        run_store.save_run(payload)
     except Exception:
         pass  # history is a convenience; never fail the run over it
 
@@ -752,6 +787,7 @@ def _result_payload(snapshot: dict[str, Any]) -> dict[str, Any]:
         "llm_insights": snapshot.get("llm_insights"),
         "insights": snapshot.get("insights"),
         "a2a": snapshot.get("a2a"),
+        "callback_events": snapshot.get("callback_events", []),
         "run_input": snapshot.get("run_input"),
         "stages_completed": snapshot.get("stages_completed"),
         "stages": snapshot.get("stages"),
@@ -1090,6 +1126,7 @@ async def _start_run(
                 "trace_data": None,
                 "llm_insights": None,
                 "captured_spans": [],
+                "callback_events": [],
                 "retry_history": [],
                 "insights": None,
                 "a2a": None,
@@ -1206,6 +1243,44 @@ def run_download(run_id: str, kind: str) -> Response:
             headers={"Content-Disposition": f'attachment; filename="insights-{short}.json"'},
         )
     raise HTTPException(status_code=404, detail="Unknown download")
+
+
+# ------------------------------------------------------------- evaluation evidence
+@app.get("/api/evaluation/runs")
+def evaluation_runs(limit: int = 50) -> list[dict[str, Any]]:
+    """Return retained, row-safe evidence from Cloud Storage or local development."""
+
+    return [record.model_dump(mode="json") for record in list_evidence(limit=min(max(limit, 1), 200))]
+
+
+@app.get("/api/evaluation/runs/{run_id}")
+def evaluation_run_detail(run_id: str) -> dict[str, Any]:
+    record = get_evidence(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Unknown evaluation run")
+    return record.model_dump(mode="json")
+
+
+@app.get("/api/evaluation/runs/{run_id}/download")
+def evaluation_run_download(run_id: str) -> Response:
+    body = evidence_json(run_id)
+    if body is None:
+        raise HTTPException(status_code=404, detail="Unknown evaluation run")
+    return Response(
+        body,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="evaluation-{run_id[:8]}.json"'},
+    )
+
+
+@app.get("/api/evaluation/suites/latest")
+def evaluation_latest_suite() -> dict[str, Any]:
+    """Return the latest formal Cloud Run Job scenario evaluation."""
+
+    suite = latest_suite()
+    if suite is None:
+        raise HTTPException(status_code=404, detail="No formal evaluation suite is retained")
+    return suite.model_dump(mode="json")
 
 
 # --------------------------------------------------------------- sample datasets
@@ -1391,6 +1466,13 @@ def dashboard() -> FileResponse:
             detail="Dashboard build is unavailable. Run `npm run build` in ui first.",
         )
     return FileResponse(index_file)
+
+
+@app.get("/evaluation", include_in_schema=False)
+def evaluation_dashboard() -> FileResponse:
+    """Serve the single-page evaluation evidence view at a shareable URL."""
+
+    return dashboard()
 
 
 @app.get("/favicon.svg", include_in_schema=False)

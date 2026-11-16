@@ -139,13 +139,13 @@ def test_a2a_service_contract_is_strict_and_bound_to_localhost(tmp_path) -> None
     assert parsed.data_prep_result == data_prep
     assert root_agent.name == "model_selection_agent"
     assert type(app).__name__ == "Starlette"
-    assert (A2A_HOST, A2A_PORT) == ("127.0.0.1", 8080)
+    assert (A2A_HOST, A2A_PORT) == ("127.0.0.1", 8081)
     with TestClient(app) as client:
         response = client.get("/.well-known/agent-card.json")
     assert response.status_code == 200
     card = response.json()
     assert card["name"] == "model_selection_agent"
-    assert card["supportedInterfaces"][0]["url"] == "http://127.0.0.1:8080"
+    assert card["supportedInterfaces"][0]["url"] == "http://127.0.0.1:8081"
     with pytest.raises(ModelSelectionError, match="valid ModelSelectionRequest JSON"):
         parse_task_message('{"data_prep_result": {}, "unexpected": true}')
 

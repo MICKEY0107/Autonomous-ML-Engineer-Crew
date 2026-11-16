@@ -235,6 +235,9 @@ def test_adk_agent_a2a() -> None:
     )
     environment = os.environ.copy()
     environment["MLFLOW_DISABLE_AGENT_HINT"] = "1"
+    environment["A2A_BIND_HOST"] = "127.0.0.1"
+    environment["A2A_BIND_PORT"] = "8081"
+    a2a_url = "http://127.0.0.1:8081"
     project_root = Path(__file__).resolve().parents[1]
     process = subprocess.Popen(
         [sys.executable, "-m", "agents.model_selection_adk"],
@@ -251,7 +254,7 @@ def test_adk_agent_a2a() -> None:
                 pytest.fail("ADK A2A server exited before accepting requests")
             try:
                 card = httpx.get(
-                    "http://localhost:8080/.well-known/agent-card.json",
+                    f"{a2a_url}/.well-known/agent-card.json",
                     timeout=1.0,
                 )
                 if card.status_code == 200:
@@ -264,7 +267,7 @@ def test_adk_agent_a2a() -> None:
 
         # Real A2A protocol: Agent Card discovery + SendMessage JSON-RPC.
         result, call_info = send_model_selection_task(
-            "http://localhost:8080",
+            a2a_url,
             request.model_dump(mode="json"),
             timeout_seconds=120.0,
         )

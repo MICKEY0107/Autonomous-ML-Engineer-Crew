@@ -260,16 +260,17 @@ LLM_MODE=live
 LLM_MAX_TOKENS=700
 LLM_FALLBACK_TIMEOUT_SECONDS=15
 GEMINI_API_KEY=your-google-ai-studio-key
-CREWAI_MODEL=gemini/gemini-3.8-flash
+CREWAI_MODEL=gemini/gemini-3.5-flash-lite
+LLM_CACHE=off
 
 LANGFUSE_PUBLIC_KEY=pk-lf-your-key
 LANGFUSE_SECRET_KEY=sk-lf-your-key
 LANGFUSE_BASE_URL=https://cloud.langfuse.com
 LANGFUSE_PROJECT_ID=your-project-id
 
-A2A_AGENT_URL=http://localhost:8080
+A2A_AGENT_URL=http://127.0.0.1:8081
 A2A_BIND_HOST=127.0.0.1
-A2A_BIND_PORT=8080
+A2A_BIND_PORT=8081
 MLFLOW_UI_URL=http://127.0.0.1:5055
 API_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 VITE_API_PROXY_TARGET=http://127.0.0.1:8000
@@ -510,6 +511,31 @@ Span inputs and outputs are populated with redacted, row-safe metadata. The
 dashboard presents the same hierarchy in its Traces tab and links to the
 project-scoped Langfuse trace when credentials are configured.
 
+## Cloud deployment and formal evaluation
+
+The final-assessment path is cloud-only. The Cloud Run service hosts the React
+dashboard, FastAPI API, CrewAI Flow, ADK A2A process, MCP tools, and live Gemini
+calls. A private Cloud Storage bucket retains row-safe evaluation evidence after
+the container restarts. The separate Cloud Run Job runs the focused formal suite
+against the deployed HTTPS service, including the pipeline, A2A, MCP,
+evaluator-retry, and prompt-injection scenarios.
+
+```powershell
+.\scripts\deploy_gcp.ps1 -ProjectId YOUR_PROJECT_ID -Region asia-south1 `
+  -CloudRunVcpuUsdPerSecond CURRENT_RATE `
+  -CloudRunMemoryGibUsdPerSecond CURRENT_RATE
+gcloud run jobs execute autonomous-ml-engineer-crew-evaluation --project YOUR_PROJECT_ID --region asia-south1 --wait
+```
+
+Before presenting, configure `CLOUD_RUN_VCPU_USD_PER_SECOND` and
+`CLOUD_RUN_MEMORY_GIB_USD_PER_SECOND` from the current regional Cloud Run pricing
+page. The Evaluation Evidence page then displays a transparent infrastructure
+estimate alongside provider token cost; it never fabricates a zero-cost result.
+
+Open `/evaluation` to review retained run evidence. It intentionally separates
+held-out ML metrics from agentic-system scenario pass rate, A2A reliability, MCP
+tool reliability, callbacks, stage timings, and token/cost provenance.
+
 ## API
 
 | Method | Endpoint | Purpose |
@@ -523,6 +549,10 @@ project-scoped Langfuse trace when credentials are configured.
 | `POST` | `/api/guardrails/check` | Run the goal guardrails alone (`prediction_goal` form field). |
 | `GET` | `/api/runs` · `/api/runs/{run_id}` | Saved run history (SQLite). |
 | `GET` | `/api/runs/{run_id}/download/{model-card.md,result.json,insights.json}` | Downloads. |
+| `GET` | `/evaluation` | Cloud evaluation evidence dashboard. |
+| `GET` | `/api/evaluation/runs` · `/api/evaluation/runs/{run_id}` | Retained, typed evaluation evidence. |
+| `GET` | `/api/evaluation/runs/{run_id}/download` | Download row-safe evidence JSON. |
+| `GET` | `/api/evaluation/suites/latest` | Latest Cloud Run Job agentic-system suite. |
 | `GET` | `/api/samples` · `/api/samples/{name}` | Bundled sample datasets. |
 | `GET` | `/api/deployments/{run}` | Deployed model schema and serving policy (needs `X-API-Key` when set). |
 | `GET` | `/api/deployments/{run}/health` | Public liveness check. |
@@ -631,7 +661,7 @@ until a CSV, target column, and prediction goal are all present.
 
 ### The A2A port is busy
 
-Port `8080` is used by the local ADK service. Stop the older Python/A2A process
+Port `8081` is used by the local ADK service. Stop the older Python/A2A process
 before starting another pipeline.
 
 ### Langfuse is unavailable
