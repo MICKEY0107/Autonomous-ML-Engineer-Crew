@@ -2,7 +2,7 @@
 
 **Project:** Autonomous ML Engineer Crew  
 **Verified:** 20 October 2026  
-**Canonical editable diagram:** `architecture_diagram_publication.svg`
+**Canonical editable diagram:** `docs/assets/architecture_diagram_publication.svg`
 
 ## Scope and conclusion
 

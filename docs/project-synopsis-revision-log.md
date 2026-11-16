@@ -6,8 +6,8 @@ Date: 20 October 2026
 
 - `Agentic_AI_Project_Synopsis_Revised.docx`
 - `Autonomous ML Engineer Crew - Project Explainer Revised.docx`
-- `architecture_diagram_publication.svg` (editable master)
-- `architecture_diagram_publication_aligned.png` (rendered preview)
+- `docs/assets/architecture_diagram_publication.svg` (editable master)
+- `docs/assets/architecture_diagram_publication_aligned.png` (rendered preview)
 
 The original synopsis, explainer, architecture diagram, presentation, course handout, and template remain unchanged.
 
@@ -47,7 +47,7 @@ The original synopsis, explainer, architecture diagram, presentation, course han
 
 - `Agentic_AI_Project_Synopsis.docx`
 - `Autonomous ML Engineer Crew — Project Explainer Updated.docx`
-- `architecture_diagram.svg`
+- `docs/assets/architecture_diagram.svg`
 - `Autonomous ML Engineer Crew - Presentation - Revised.pptx`
 
 The presentation still reflects the earlier design and should be synchronized with the revised documents before the final presentation.

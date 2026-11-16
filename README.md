@@ -10,7 +10,7 @@ The system combines a CrewAI orchestration flow, Google ADK, MCP tools, MLflow,
 Langfuse/OpenTelemetry, Pydantic v2 contracts, a FastAPI boundary, and a React
 dashboard.
 
-![Autonomous ML Engineer Crew architecture](architecture_diagram_publication.png)
+![Autonomous ML Engineer Crew architecture](docs/assets/architecture_diagram_publication.png)
 
 ## Handoff quick start
 
