@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   BarChart3,
-  BookOpen,
   Bot,
   BrainCircuit,
   Circle,
@@ -258,16 +257,6 @@ export default function Dashboard() {
             >
               <FileCheck size={13} />
               <span>Eval Report</span>
-            </a>
-            <a
-              href="/project-guide"
-              target="_blank"
-              rel="noreferrer"
-              className="action-link w-auto text-xs text-slate-300 hover:text-slate-100"
-              title="View Architecture & Concepts Guide"
-            >
-              <BookOpen size={13} />
-              <span>Guide</span>
             </a>
             <button type="button" className="action-link w-auto text-xs" onClick={() => setHistoryOpen(true)}><History size={13} /> History</button>
             <span className={`status-chip ${status.tone}`}><Circle size={7} fill="currentColor" /> {status.label}</span>

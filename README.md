@@ -32,8 +32,8 @@ locally, and prints the final result. To use live LLM decisions, copy
 `.env.example` to `.env`, add the desired provider credentials, and set
 `LLM_MODE=live`.
 
-Open [`docs/README.md`](docs/README.md) for the organized project-guide index,
-or run the dashboard and visit <http://127.0.0.1:8000/project-guide>.
+Open [`docs/README.md`](docs/README.md) for the organized project-guide index.
+The guide remains repository documentation and is not part of the public dashboard.
 
 ## What it does
 

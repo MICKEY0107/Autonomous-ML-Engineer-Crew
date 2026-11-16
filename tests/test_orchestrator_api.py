@@ -82,9 +82,7 @@ def test_dashboard_root_serves_compiled_frontend() -> None:
     assert "Autonomous ML Engineer Crew" in response.text
     assert client.get("/favicon.svg").status_code == 200
 
-    guide = client.get("/project-guide")
-    assert guide.status_code == 200
-    assert "A2A Protocol" in guide.text
+    assert client.get("/project-guide").status_code == 404
 
     evaluation = client.get("/evaluation")
     assert evaluation.status_code == 200

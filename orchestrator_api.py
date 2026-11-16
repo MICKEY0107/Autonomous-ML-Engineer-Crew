@@ -56,7 +56,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 UI_ARTIFACT_ROOT = PROJECT_ROOT / "artifacts" / "ui"
 UI_MLFLOW_DATABASE = (UI_ARTIFACT_ROOT / "mlflow.db").resolve()
 UI_DIST = PROJECT_ROOT / "ui" / "dist"
-PROJECT_GUIDE = PROJECT_ROOT / "docs" / "project-explainer.html"
 REPORTS_ROOT = PROJECT_ROOT / "reports"
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 MLFLOW_URL = os.environ["MLFLOW_UI_URL"]
@@ -1481,15 +1480,6 @@ def dashboard_favicon() -> FileResponse:
     if not favicon.is_file():
         raise HTTPException(status_code=404, detail="Dashboard favicon is unavailable")
     return FileResponse(favicon, media_type="image/svg+xml")
-
-
-@app.get("/project-guide", include_in_schema=False)
-def project_guide() -> FileResponse:
-    """Serve the plain-language architecture and concepts guide."""
-
-    if not PROJECT_GUIDE.is_file():
-        raise HTTPException(status_code=404, detail="Project guide is unavailable")
-    return FileResponse(PROJECT_GUIDE, media_type="text/html")
 
 
 if (UI_DIST / "assets").is_dir():
