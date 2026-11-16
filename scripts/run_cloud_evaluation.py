@@ -24,6 +24,7 @@ from orchestrator.evaluation_evidence import save_suite
 TARGET_URL = os.environ.get("EVALUATION_TARGET_URL", "").rstrip("/")
 POLL_SECONDS = float(os.environ.get("EVALUATION_POLL_SECONDS", "2"))
 TIMEOUT_SECONDS = int(os.environ.get("EVALUATION_TIMEOUT_SECONDS", "900"))
+START_RETRY_SECONDS = int(os.environ.get("EVALUATION_START_RETRY_SECONDS", "60"))
 
 
 def _request(path: str, *, method: str = "GET", data: bytes | None = None, content_type: str | None = None) -> tuple[int, dict]:
@@ -82,9 +83,19 @@ def _start_pipeline(*, force_fail: bool) -> tuple[dict, int]:
         _dataset(),
     )
     started = time.perf_counter()
-    status, payload = _request("/api/pipeline/run", method="POST", data=body, content_type=content_type)
-    if status != 202:
-        raise RuntimeError(f"pipeline start failed ({status}): {payload}")
+    start_deadline = time.monotonic() + START_RETRY_SECONDS
+    while True:
+        status, payload = _request(
+            "/api/pipeline/run", method="POST", data=body, content_type=content_type
+        )
+        if status == 202:
+            break
+        # A terminal result is published before the worker's trace cleanup
+        # finishes. The formal suite runs sequentially, so wait only for this
+        # known transient rather than masking real request failures.
+        if status != 409 or time.monotonic() >= start_deadline:
+            raise RuntimeError(f"pipeline start failed ({status}): {payload}")
+        time.sleep(POLL_SECONDS)
     deadline = time.monotonic() + TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         _, current = _request("/api/pipeline/status")
