@@ -71,7 +71,9 @@ $envVarList = @(
     "CLOUD_RUN_REGION=$Region",
     "GIT_COMMIT=$(git rev-parse --short HEAD)",
     "CLOUD_RUN_VCPU=2",
-    "CLOUD_RUN_MEMORY_GIB=4"
+    "CLOUD_RUN_MEMORY_GIB=4",
+    "LLM_INPUT_COST_PER_1M=0.15",
+    "LLM_OUTPUT_COST_PER_1M=1.25"
 )
 if ($CloudRunVcpuUsdPerSecond) {
     $envVarList += "CLOUD_RUN_VCPU_USD_PER_SECOND=$CloudRunVcpuUsdPerSecond"

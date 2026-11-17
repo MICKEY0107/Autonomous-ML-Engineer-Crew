@@ -44,23 +44,31 @@ _LOCK = threading.Lock()
 _RECORDS: list[LLMUsageRecord] = []
 
 
-def _price(name: str) -> float:
+DEFAULT_INPUT_COST_PER_1M = 0.15   # Gemini 3.5 Flash-Lite input pricing ($/1M tokens)
+DEFAULT_OUTPUT_COST_PER_1M = 1.25  # Gemini 3.5 Flash-Lite output pricing ($/1M tokens)
+
+
+def _price(name: str, default: float = 0.0) -> float:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
     try:
-        return max(float(os.getenv(name, "0") or 0), 0.0)
+        return max(float(raw), 0.0)
     except ValueError:
-        return 0.0
+        return default
 
 
 LOCAL_PROVIDERS = frozenset()
 
 
 def _provider_price(provider: str, direction: str) -> float:
-    """USD per 1M tokens: ``<PROVIDER>_<DIR>_COST_PER_1M`` else the global price."""
+    """USD per 1M tokens: ``<PROVIDER>_<DIR>_COST_PER_1M`` else global price or Gemini default."""
 
     specific = f"{provider.upper()}_{direction}_COST_PER_1M"
+    default_price = DEFAULT_INPUT_COST_PER_1M if direction == "INPUT" else DEFAULT_OUTPUT_COST_PER_1M
     if provider and os.getenv(specific, "").strip():
-        return _price(specific)
-    return _price(f"LLM_{direction}_COST_PER_1M")
+        return _price(specific, default_price)
+    return _price(f"LLM_{direction}_COST_PER_1M", default_price)
 
 
 def estimate_cost(prompt_tokens: int, completion_tokens: int, provider: str = "") -> float:
